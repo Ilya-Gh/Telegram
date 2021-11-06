@@ -374,6 +374,7 @@
     <string name="ChannelUsernamePlaceholder">link</string>
     <string name="ChannelPrivateLinkHelp">People can join your channel by following this link. You can revoke the link any time.</string>
     <string name="MegaPrivateLinkHelp">People can join your group by following this link. You can revoke the link any time.</string>
+    <string name="SavingContentHelp">Participants won’t be able to forward messages from this group or save media files.</string>
     <string name="DescriptionOptionalPlaceholder">Description (optional)</string>
     <string name="DescriptionPlaceholder">Description</string>
     <string name="DescriptionInfo">You can provide an optional description for your channel.</string>
@@ -594,6 +595,8 @@
     <string name="TypePublicGroup">Public</string>
     <string name="TypeLocationGroup">Link</string>
     <string name="TypeLocationGroupEdit">Tap to add a permanent link</string>
+    <string name="SavingContentTitle">Saving content</string>
+    <string name="SavingContentMessage">Restrict saving content</string>
     <string name="ChoosePhoto">Choose photo</string>
     <string name="ChoosePhotoOrVideo">Choose photo or video</string>
     <string name="AddPhoto">Set new photo</string>
@@ -778,6 +781,8 @@
     <string name="EventLogToggledInvitesOff">un1 disabled group invites</string>
     <string name="EventLogToggledSignaturesOn">un1 enabled signatures</string>
     <string name="EventLogToggledSignaturesOff">un1 disabled signatures</string>
+    <string name="EventLogToggledNoForwardsOn">un1 disabled message forwards</string>
+    <string name="EventLogToggledNoForwardsOff">un1 enabled message forwards</string>
     <string name="EventLogRestrictedUntil">changed permissions for %1$s\n\nDuration: %2$s</string>
     <string name="EventLogDefaultPermissions">changed default permissions</string>
     <string name="EventLogRestrictedSendStickers">Send stickers &amp; GIFs</string>
@@ -908,6 +913,10 @@
     <string name="SponsoredMessageAlertText">See https://telegram.org</string>
     <string name="SponsoredMessageAlertLearnMore">LEARN MORE</string>
     <string name="SponsoredMessageAlertLearnMoreUrl">https://telegram.org</string>
+    <string name="ForwardRestrictionInfoChannel">Forwards from this channel \n are restricted.</string>
+    <string name="ForwardRestrictionInfoChannel2">Forwards from this channel are restricted.</string>
+    <string name="ForwardRestrictionInfoGroup">Forwards from this group \n are restricted.</string>
+    <string name="ForwardRestrictionInfoGroup2">Forwards from this group are restricted.</string>
     <string name="InstantViewNightMode">The dark theme will turn automatically during night time</string>
     <string name="InstantViewReference">Reference</string>
     <string name="IsSendingGame">%1$s is playing a game...</string>
@@ -3324,6 +3333,7 @@
     <string name="SecretLinkPreviewAlert">Would you like to enable extended link previews in Secret Chats? Note that link previews are generated on Telegram servers.</string>
     <string name="SecretChatContextBotAlert">Please note that inline bots are provided by third-party developers. For the bot to work, the symbols you type after the bot\'s username are sent to the respective developer.</string>
     <string name="EditMessageError">Sorry, you can\'t edit this message.</string>
+    <string name="ForwardMessageError">Sorry, you can\'t forward this message.</string>
     <string name="AllowReadCall">Please allow Telegram to receive calls so that we can automatically enter your code for you.</string>
     <string name="AllowReadCallAndLog">Please allow Telegram to receive calls and read the call log so that we can automatically enter your code for you.</string>
     <string name="AllowReadCallLog">Please allow Telegram to read the call log so that we can automatically enter your code for you.</string>

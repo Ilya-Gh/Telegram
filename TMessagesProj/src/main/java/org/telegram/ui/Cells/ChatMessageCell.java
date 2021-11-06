@@ -68,8 +68,6 @@ import android.widget.Toast;
 
 import androidx.core.graphics.ColorUtils;
 
-import com.google.android.exoplayer2.util.Log;
-
 import org.telegram.PhoneFormat.PhoneFormat;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ChatObject;
@@ -612,6 +610,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     public boolean isThreadChat;
     public boolean hasDiscussion;
     public boolean isPinned;
+    public boolean noForwards;
     private boolean wasPinned;
     public long linkedChatId;
     public boolean isRepliesChat;
@@ -3002,6 +3001,18 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
             }
         }
 
+        if (currentMessageObject != null) {
+            drawSideButton = !isRepliesChat && checkNeedDrawShareButton(currentMessageObject) && (currentPosition == null
+                    || currentPosition.last) ? 1 : 0;
+            if (isPinnedChat
+                    || drawSideButton == 1
+                    && currentMessageObject.messageOwner.fwd_from != null
+                    && !currentMessageObject.isOutOwner()
+                    && currentMessageObject.messageOwner.fwd_from.saved_from_peer != null
+                    && currentMessageObject.getDialogId() == UserConfig.getInstance(currentAccount).getClientUserId()) {
+                drawSideButton = 2;
+            }
+        }
         attachedToWindow = true;
 
         animationOffsetX = 0;
@@ -6299,6 +6310,27 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
             seekBar.setSelected(isDrawSelectionBackground());
         }
         invalidate();
+    }
+
+    public void setNoForwards(boolean value) {
+        noForwards = value;
+        if (currentMessageObject != null) {
+            drawSideButton = !isRepliesChat && checkNeedDrawShareButton(currentMessageObject) && (currentPosition == null
+                    || currentPosition.last) ? 1 : 0;
+            if (isPinnedChat
+                    || drawSideButton == 1
+                    && currentMessageObject.messageOwner.fwd_from != null
+                    && !currentMessageObject.isOutOwner()
+                    && currentMessageObject.messageOwner.fwd_from.saved_from_peer != null
+                    && currentMessageObject.getDialogId() == UserConfig.getInstance(currentAccount).getClientUserId()) {
+                drawSideButton = 2;
+            }
+        }
+        invalidate();
+        if (getParent() != null) {
+            ((View) getParent()).invalidate();
+
+        }
     }
 
     public void setInvalidatesParent(boolean value) {
@@ -9599,6 +9631,9 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     }
 
     private boolean checkNeedDrawShareButton(MessageObject messageObject) {
+        if (noForwards) {
+            return false;
+        }
         if (currentMessageObject.deleted || currentMessageObject.isSponsored()) {
             return false;
         }

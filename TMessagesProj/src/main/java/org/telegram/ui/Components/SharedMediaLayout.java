@@ -13,6 +13,7 @@ import android.content.Context;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
@@ -49,6 +50,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
@@ -417,6 +419,8 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
 
     private int[] hasMedia;
     private int initialTab;
+
+    private boolean noForwards;
 
     private SparseArray<MessageObject>[] selectedFiles = new SparseArray[]{new SparseArray<>(), new SparseArray<>()};
     private int cantDeleteMessagesCount;
@@ -1116,6 +1120,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
         profileActivity.getNotificationCenter().addObserver(this, NotificationCenter.messagePlayingDidReset);
         profileActivity.getNotificationCenter().addObserver(this, NotificationCenter.messagePlayingPlayStateChanged);
         profileActivity.getNotificationCenter().addObserver(this, NotificationCenter.messagePlayingDidStart);
+        profileActivity.getNotificationCenter().addObserver(this, NotificationCenter.chatInfoDidLoad);
 
         for (int a = 0; a < 10; a++) {
             //cellCache.add(new SharedPhotoVideoCell(context));
@@ -1425,11 +1430,14 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
             actionModeViews.add(gotoItem);
             gotoItem.setOnClickListener(v -> onActionBarItemClick(gotochat));
 
-            forwardItem = new ActionBarMenuItem(context, null, Theme.getColor(Theme.key_actionBarActionModeDefaultSelector), Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2), false);
+            forwardItem = new ActionBarMenuItem(context, null,
+                    Theme.getColor(Theme.key_actionBarActionModeDefaultSelector),
+                    Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2), false);
             forwardItem.setIcon(R.drawable.msg_forward);
             forwardItem.setContentDescription(LocaleController.getString("Forward", R.string.Forward));
             forwardItem.setDuplicateParentStateEnabled(false);
-            actionModeLayout.addView(forwardItem, new LinearLayout.LayoutParams(AndroidUtilities.dp(54), ViewGroup.LayoutParams.MATCH_PARENT));
+            actionModeLayout.addView(forwardItem,
+                    new LinearLayout.LayoutParams(AndroidUtilities.dp(54), ViewGroup.LayoutParams.MATCH_PARENT));
             actionModeViews.add(forwardItem);
             forwardItem.setOnClickListener(v -> onActionBarItemClick(forward));
         }
@@ -2853,6 +2861,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
         profileActivity.getNotificationCenter().removeObserver(this, NotificationCenter.messagePlayingDidReset);
         profileActivity.getNotificationCenter().removeObserver(this, NotificationCenter.messagePlayingPlayStateChanged);
         profileActivity.getNotificationCenter().removeObserver(this, NotificationCenter.messagePlayingDidStart);
+        profileActivity.getNotificationCenter().removeObserver(this, NotificationCenter.chatInfoDidLoad);
     }
 
     private void checkCurrentTabValid() {
@@ -3800,6 +3809,38 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
                     }
                 }
             }
+        } else if (id == NotificationCenter.chatInfoDidLoad) {
+            TLRPC.ChatFull chatFull = (TLRPC.ChatFull) args[0];
+            if (chatFull.id == -dialog_id) {
+                TLRPC.Chat currentChat = null;
+                if (DialogObject.isChatDialog(dialog_id)) {
+                    currentChat = profileActivity.getMessagesController().getChat(-dialog_id);
+                }
+                if (currentChat != null) {
+                    noForwards = currentChat.noforwards;
+                    // forwardItem.setEnabled(!noForwards);
+                    forwardItem.setAlpha(!noForwards ? 1.0f : 0.5f);
+                    if (noForwards) {
+                        forwardItem.setOnClickListener(v -> {
+                            TLRPC.Chat chat = null;
+                            if (DialogObject.isChatDialog(dialog_id)) {
+                                chat = profileActivity.getMessagesController().getChat(-dialog_id);
+                                String text;
+                                if (ChatObject.isChannel(chat) && !chat.megagroup) {
+                                    text = LocaleController.getString("ForwardRestrictionInfoChannel2", R.string.ForwardRestrictionInfoChannel2);
+                                }  else {
+                                    text = LocaleController.getString("ForwardRestrictionInfoGroup2", R.string.ForwardRestrictionInfoGroup2);
+                                }
+                                Toast toast = Toast.makeText(getContext(), text, Toast.LENGTH_SHORT);
+                                toast.show();
+                            }
+                        });
+
+                    } else {
+                        forwardItem.setOnClickListener(v -> onActionBarItemClick(forward));
+                    }
+                }
+            }
         }
     }
 
@@ -4422,6 +4463,34 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
         deleteItem.setVisibility(cantDeleteMessagesCount == 0 ? View.VISIBLE : View.GONE);
         if (gotoItem != null) {
             gotoItem.setVisibility(View.VISIBLE);
+        }
+
+        TLRPC.Chat currentChat = null;
+        if (DialogObject.isChatDialog(dialog_id)) {
+            currentChat = profileActivity.getMessagesController().getChat(-dialog_id);
+            noForwards = currentChat.noforwards;
+        } else {
+            noForwards = false;
+        }
+        forwardItem.setAlpha(!noForwards ? 1.0f : 0.5f);
+        if (noForwards) {
+            forwardItem.setOnClickListener(v -> {
+                TLRPC.Chat chat = null;
+                if (DialogObject.isChatDialog(dialog_id)) {
+                    chat = profileActivity.getMessagesController().getChat(-dialog_id);
+                    String text;
+                    if (ChatObject.isChannel(chat) && !chat.megagroup) {
+                        text = LocaleController.getString("ForwardRestrictionInfoChannel2", R.string.ForwardRestrictionInfoChannel2);
+                    }  else {
+                        text = LocaleController.getString("ForwardRestrictionInfoGroup2", R.string.ForwardRestrictionInfoGroup2);
+                    }
+                    Toast toast = Toast.makeText(getContext(), text, Toast.LENGTH_SHORT);
+                    toast.show();
+                }
+            });
+
+        } else {
+            forwardItem.setOnClickListener(v -> onActionBarItemClick(forward));
         }
         selectedMessagesCountTextView.setNumber(1, false);
         AnimatorSet animatorSet = new AnimatorSet();

@@ -1813,6 +1813,12 @@ public class MessageObject {
             double vol = ChatObject.getParticipantVolume(action.participant) / 100.0;
             messageText = replaceWithLink(LocaleController.formatString("ActionVolumeChanged", R.string.ActionVolumeChanged,  (int) (vol > 0 ? Math.max(vol, 1) : 0)), "un1", fromUser);
             messageText = replaceWithLink(messageText, "un2", object);
+        } else if (event.action instanceof TLRPC.TL_channelAdminLogEventActionToggleNoForwards) {
+            if (((TLRPC.TL_channelAdminLogEventActionToggleNoForwards) event.action).new_value) {
+                messageText = replaceWithLink(LocaleController.getString("EventLogToggledNoForwardsOn", R.string.EventLogToggledNoForwardsOn), "un1", fromUser);
+            } else {
+                messageText = replaceWithLink(LocaleController.getString("EventLogToggledNoForwardsOff", R.string.EventLogToggledNoForwardsOff), "un1", fromUser);
+            }
         } else if (event.action instanceof TLRPC.TL_channelAdminLogEventActionChangeHistoryTTL) {
             TLRPC.TL_channelAdminLogEventActionChangeHistoryTTL action = (TLRPC.TL_channelAdminLogEventActionChangeHistoryTTL) event.action;
             if (!chat.megagroup) {

@@ -85,6 +85,8 @@ import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.SerializedData;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.TLRPC.InputPeer;
+import org.telegram.tgnet.TLRPC.TL_messages_forwardMessages;
 import org.telegram.ui.ActionBar.ActionBarMenuItem;
 import org.telegram.ui.ActionBar.ActionBarPopupWindow;
 import org.telegram.ui.ActionBar.AlertDialog;
@@ -234,6 +236,20 @@ public class AlertsCreator {
                 case "SCHEDULE_TOO_MUCH":
                     showSimpleToast(fragment, LocaleController.getString("MessageScheduledLimitReached", R.string.MessageScheduledLimitReached));
                     break;
+                case "CHAT_FORWARDS_RESTRICTED":
+                    if (fragment != null) {
+                        showSimpleAlert(fragment, LocaleController.getString("ForwardMessageError", R.string.ForwardMessageError));
+                    } else {
+                        showSimpleToast(null, LocaleController.getString("ForwardMessageError", R.string.ForwardMessageError));
+                    }
+                    if (request instanceof TLRPC.TL_messages_forwardMessages) {
+                        InputPeer peer = ((TL_messages_forwardMessages) request).from_peer;
+                        MessagesController.getInstance(currentAccount)
+                                .loadFullChat(peer.chat_id != 0 ? peer.chat_id : peer.channel_id,
+                                        ConnectionsManager.generateClassGuid(), true);
+                    }
+                    break;
+
             }
         } else if (request instanceof TLRPC.TL_messages_importChatInvite) {
             if (error.text.startsWith("FLOOD_WAIT")) {
