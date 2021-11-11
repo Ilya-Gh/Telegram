@@ -236,6 +236,27 @@ public class AlertsCreator {
                 case "SCHEDULE_TOO_MUCH":
                     showSimpleToast(fragment, LocaleController.getString("MessageScheduledLimitReached", R.string.MessageScheduledLimitReached));
                     break;
+                case "SEND_AS_PEER_INVALID":
+                    TLRPC.InputPeer inputPeer;
+                    if (request instanceof TLRPC.TL_messages_sendMessage) {
+                        inputPeer = ((TLRPC.TL_messages_sendMessage) request).peer;
+                    } else if (request instanceof TLRPC.TL_messages_sendMedia) {
+                        inputPeer = ((TLRPC.TL_messages_sendMedia) request).peer;
+                    } else if (request instanceof TLRPC.TL_messages_sendInlineBotResult) {
+                        inputPeer = ((TLRPC.TL_messages_sendInlineBotResult) request).peer;
+                    } else if (request instanceof TLRPC.TL_messages_forwardMessages) {
+                        inputPeer = ((TL_messages_forwardMessages) request).from_peer;
+                    } else if (request instanceof TLRPC.TL_messages_sendMultiMedia) {
+                        inputPeer = ((TLRPC.TL_messages_sendMultiMedia) request).peer;
+                    } else {
+                        inputPeer = null;
+                    }
+                    if (inputPeer != null) {
+                        MessagesController.getInstance(currentAccount)
+                                .loadFullChat(inputPeer.chat_id != 0 ? inputPeer.chat_id : inputPeer.channel_id,
+                                        ConnectionsManager.generateClassGuid(), true);
+                    }
+                    break;
                 case "CHAT_FORWARDS_RESTRICTED":
                     if (fragment != null) {
                         showSimpleAlert(fragment, LocaleController.getString("ForwardMessageError", R.string.ForwardMessageError));

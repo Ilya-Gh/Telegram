@@ -596,6 +596,7 @@
     <string name="TypeLocationGroup">Link</string>
     <string name="TypeLocationGroupEdit">Tap to add a permanent link</string>
     <string name="SavingContentTitle">Saving content</string>
+    <string name="SendContentTitle">Send message as...</string>
     <string name="SavingContentMessage">Restrict saving content</string>
     <string name="ChoosePhoto">Choose photo</string>
     <string name="ChoosePhotoOrVideo">Choose photo or video</string>
@@ -913,9 +914,9 @@
     <string name="SponsoredMessageAlertText">See https://telegram.org</string>
     <string name="SponsoredMessageAlertLearnMore">LEARN MORE</string>
     <string name="SponsoredMessageAlertLearnMoreUrl">https://telegram.org</string>
-    <string name="ForwardRestrictionInfoChannel">Forwards from this channel \n are restricted.</string>
+    <string name="ForwardRestrictionInfoChannel">Forwards from this channel \nare restricted.</string>
     <string name="ForwardRestrictionInfoChannel2">Forwards from this channel are restricted.</string>
-    <string name="ForwardRestrictionInfoGroup">Forwards from this group \n are restricted.</string>
+    <string name="ForwardRestrictionInfoGroup">Forwards from this group \nare restricted.</string>
     <string name="ForwardRestrictionInfoGroup2">Forwards from this group are restricted.</string>
     <string name="InstantViewNightMode">The dark theme will turn automatically during night time</string>
     <string name="InstantViewReference">Reference</string>

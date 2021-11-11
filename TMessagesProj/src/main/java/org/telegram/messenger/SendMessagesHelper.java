@@ -1965,6 +1965,16 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                     req.drop_media_captions = hideCaption;
                     req.with_my_score = messages.size() == 1 && messages.get(0).messageOwner.with_my_score;
 
+
+                    chat = getMessagesController().getChat(-peer);
+                    if (chat != null) {
+                        TLRPC.ChatFull chatFull = getMessagesController().getChatFull(chat.id);
+                        if (chatFull != null && chatFull.default_send_as != null) {
+                            TLRPC.Peer sendAs = chatFull.default_send_as;
+                            req.send_as = getMessagesController().getInputPeer(sendAs);
+                        }
+                    }
+
                     final ArrayList<TLRPC.Message> newMsgObjArr = arr;
                     final ArrayList<MessageObject> newMsgArr = new ArrayList<>(objArr);
                     final LongSparseArray<TLRPC.Message> messagesByRandomIdsFinal = messagesByRandomIds;
@@ -3016,6 +3026,14 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
         request.random_id = random_id != 0 ? random_id : getNextRandomId();
         request.message = "";
         request.media = game;
+        TLRPC.Chat chat = getMessagesController().getChat(DialogObject.getPeerDialogId(peer));
+        if (chat != null) {
+            TLRPC.ChatFull chatFull = getMessagesController().getChatFull(chat.id);
+            if (chatFull != null && chatFull.default_send_as != null) {
+                TLRPC.Peer sendAs = chatFull.default_send_as;
+                request.send_as = getMessagesController().getInputPeer(sendAs);
+            }
+        }
         final long newTaskId;
         if (taskId == 0) {
             NativeByteBuffer data = null;
@@ -3433,8 +3451,22 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                         newMsg.flags |= 65536;
                     }
                 } else {
-                    newMsg.from_id = new TLRPC.TL_peerUser();
-                    newMsg.from_id.user_id = myId;
+
+
+                    TLRPC.Chat chat = getMessagesController().getChat(-peer);
+                    if (chat != null) {
+                        TLRPC.ChatFull chatFull = getMessagesController().getChatFull(chat.id);
+                        if (chatFull != null && chatFull.default_send_as != null) {
+                            TLRPC.Peer sendAs = chatFull.default_send_as;
+                            newMsg.from_id = sendAs;
+                        } else {
+                            newMsg.from_id = new TLRPC.TL_peerUser();
+                            newMsg.from_id.user_id = myId;
+                        }
+                    } else {
+                        newMsg.from_id = new TLRPC.TL_peerUser();
+                        newMsg.from_id.user_id = myId;
+                    }
                     newMsg.flags |= TLRPC.MESSAGE_FLAG_HAS_FROM_ID;
                 }
                 getUserConfig().saveConfig(false);
@@ -3652,6 +3684,15 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                         reqSend.schedule_date = scheduleDate;
                         reqSend.flags |= 1024;
                     }
+                    TLRPC.Chat chat = getMessagesController().getChat(-peer);
+                    if (chat != null) {
+                        TLRPC.ChatFull chatFull = getMessagesController().getChatFull(chat.id);
+                        if (chatFull != null && chatFull.default_send_as != null) {
+                            TLRPC.Peer sendAs = chatFull.default_send_as;
+                            reqSend.send_as = getMessagesController().getInputPeer(sendAs);
+                        }
+                    }
+
                     performSendMessageRequest(reqSend, newMsgObj, null, null, parentObject, params, scheduleDate != 0);
                     if (retryMessageObject == null) {
                         getMediaDataController().cleanDraft(peer, replyToTopMsg != null ? replyToTopMsg.getId() : 0, false);
@@ -3986,6 +4027,14 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                             inputSingleMedia.flags |= 1;
                         }
                         request.multi_media.add(inputSingleMedia);
+                        TLRPC.Chat chat = getMessagesController().getChat(-peer);
+                        if (chat != null) {
+                            TLRPC.ChatFull chatFull = getMessagesController().getChatFull(chat.id);
+                            if (chatFull != null && chatFull.default_send_as != null) {
+                                TLRPC.Peer sendAs = chatFull.default_send_as;
+                                request.send_as = getMessagesController().getInputPeer(sendAs);
+                            }
+                        }
                         reqSend = request;
                     } else {
                         TLRPC.TL_messages_sendMedia request = new TLRPC.TL_messages_sendMedia();
@@ -4009,6 +4058,15 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
 
                         if (delayedMessage != null) {
                             delayedMessage.sendRequest = request;
+                        }
+
+                        TLRPC.Chat chat = getMessagesController().getChat(-peer);
+                        if (chat != null) {
+                            TLRPC.ChatFull chatFull = getMessagesController().getChatFull(chat.id);
+                            if (chatFull != null && chatFull.default_send_as != null) {
+                                TLRPC.Peer sendAs = chatFull.default_send_as;
+                                request.send_as = getMessagesController().getInputPeer(sendAs);
+                            }
                         }
                         reqSend = request;
                     }
@@ -4366,6 +4424,14 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                         reqSend.id.add(retryMessageObject.messageOwner.fwd_from.channel_post);
                     }
                 }
+                TLRPC.Chat chat = getMessagesController().getChat(-peer);
+                if (chat != null) {
+                    TLRPC.ChatFull chatFull = getMessagesController().getChatFull(chat.id);
+                    if (chatFull != null && chatFull.default_send_as != null) {
+                        TLRPC.Peer sendAs = chatFull.default_send_as;
+                        reqSend.send_as = getMessagesController().getInputPeer(sendAs);
+                    }
+                }
                 performSendMessageRequest(reqSend, newMsgObj, null, null, parentObject, params, scheduleDate != 0);
             } else if (type == 9) {
                 TLRPC.TL_messages_sendInlineBotResult reqSend = new TLRPC.TL_messages_sendInlineBotResult();
@@ -4386,6 +4452,14 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                 if (retryMessageObject == null) {
                     reqSend.clear_draft = true;
                     getMediaDataController().cleanDraft(peer, replyToTopMsg != null ? replyToTopMsg.getId() : 0, false);
+                }
+                TLRPC.Chat chat = getMessagesController().getChat(-peer);
+                if (chat != null) {
+                    TLRPC.ChatFull chatFull = getMessagesController().getChatFull(chat.id);
+                    if (chatFull != null && chatFull.default_send_as != null) {
+                        TLRPC.Peer sendAs = chatFull.default_send_as;
+                        reqSend.send_as = getMessagesController().getInputPeer(sendAs);
+                    }
                 }
                 performSendMessageRequest(reqSend, newMsgObj, null, null, parentObject, params, scheduleDate != 0);
             }

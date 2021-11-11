@@ -39,6 +39,8 @@ import org.telegram.tgnet.RequestDelegate;
 import org.telegram.tgnet.SerializedData;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.TLRPC.ChatFull;
+import org.telegram.tgnet.TLRPC.Peer;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
@@ -6073,6 +6075,24 @@ public class MessagesController extends BaseController implements NotificationCe
         if (threads.get(threadMsgId) != null) {
             return false;
         }
+
+        boolean shouldIgnoreTyping = false;
+
+        TLRPC.Chat chat2 = getMessagesController().getChat(-dialogId);
+        if (chat2 != null) {
+            TLRPC.ChatFull chatFull = getMessagesController().getChatFull(chat2.id);
+            if (chatFull != null && chatFull.default_send_as != null) {
+                TLRPC.Peer sendAs = chatFull.default_send_as;
+                 if (sendAs instanceof TLRPC.TL_peerChannel) {
+                     shouldIgnoreTyping = true;
+                 }
+            }
+        }
+
+        if (shouldIgnoreTyping) {
+           return false;
+        }
+
         if (!DialogObject.isEncryptedDialog(dialogId)) {
             TLRPC.TL_messages_setTyping req = new TLRPC.TL_messages_setTyping();
             if (threadMsgId != 0) {
@@ -9122,6 +9142,25 @@ public class MessagesController extends BaseController implements NotificationCe
             if (response != null) {
                 processUpdates((TLRPC.Updates) response, false);
                 AndroidUtilities.runOnUIThread(() -> getNotificationCenter().postNotificationName(NotificationCenter.updateInterfaces, UPDATE_MASK_CHAT));
+            }
+        }, ConnectionsManager.RequestFlagInvokeAfter);
+    }
+
+    public void saveDefaultSendAs(long chatId, Peer sendAsId) {
+        TLRPC.TL_messages_saveDefaultSendAs req = new TLRPC.TL_messages_saveDefaultSendAs();
+        req.peer = getInputPeer(chatId);
+        req.send_as = getInputPeer(sendAsId);
+        getConnectionsManager().sendRequest(req, (response, error) -> {
+            if (response instanceof TLRPC.TL_boolTrue) {
+                AndroidUtilities.runOnUIThread(() -> {
+                    ChatFull chatFull = getChatFull(-chatId);
+                    chatFull.default_send_as = sendAsId;
+                    getMessagesStorage().updateChatInfo(chatFull, false);
+                });
+            } else if (error != null) {
+                AndroidUtilities.runOnUIThread(() -> {
+                    loadFullChat(-chatId, 0, true);
+                });
             }
         }, ConnectionsManager.RequestFlagInvokeAfter);
     }

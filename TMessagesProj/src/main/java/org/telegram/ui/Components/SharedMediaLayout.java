@@ -3822,18 +3822,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
                     forwardItem.setAlpha(!noForwards ? 1.0f : 0.5f);
                     if (noForwards) {
                         forwardItem.setOnClickListener(v -> {
-                            TLRPC.Chat chat = null;
-                            if (DialogObject.isChatDialog(dialog_id)) {
-                                chat = profileActivity.getMessagesController().getChat(-dialog_id);
-                                String text;
-                                if (ChatObject.isChannel(chat) && !chat.megagroup) {
-                                    text = LocaleController.getString("ForwardRestrictionInfoChannel2", R.string.ForwardRestrictionInfoChannel2);
-                                }  else {
-                                    text = LocaleController.getString("ForwardRestrictionInfoGroup2", R.string.ForwardRestrictionInfoGroup2);
-                                }
-                                Toast toast = Toast.makeText(getContext(), text, Toast.LENGTH_SHORT);
-                                toast.show();
-                            }
+                          onClickNoForwards(v);
                         });
 
                     } else {
@@ -3843,6 +3832,37 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
             }
         }
     }
+
+     private void onClickNoForwards(View view) {
+         TLRPC.Chat chat = null;
+         if (DialogObject.isChatDialog(dialog_id)) {
+             chat = profileActivity.getMessagesController().getChat(-dialog_id);
+             String text;
+             if (ChatObject.isChannel(chat) && !chat.megagroup) {
+                 text = LocaleController.getString("ForwardRestrictionInfoChannel2", R.string.ForwardRestrictionInfoChannel2);
+             }  else {
+                 text = LocaleController.getString("ForwardRestrictionInfoGroup2", R.string.ForwardRestrictionInfoGroup2);
+             }
+             showNoForwardTooltip(view, text);
+         }
+     }
+
+     private HintView noForwardsHintView;
+
+    private void showNoForwardTooltip(View view, String text) {
+        if (profileActivity == null) {
+            return;
+        }
+        if (noForwardsHintView == null) {
+            noForwardsHintView = new HintView(getContext(), 9);
+            ((FrameLayout) (profileActivity).getFragmentView())
+                    .addView(noForwardsHintView,
+                            LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.LEFT | Gravity.TOP, 10, 0, 10, 0));
+        }
+        noForwardsHintView.setText(text);
+        noForwardsHintView.showForView(view, true);
+    }
+
 
     private void saveScrollPosition() {
         for (int k = 0; k < mediaPages.length; k++) {
@@ -4475,18 +4495,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
         forwardItem.setAlpha(!noForwards ? 1.0f : 0.5f);
         if (noForwards) {
             forwardItem.setOnClickListener(v -> {
-                TLRPC.Chat chat = null;
-                if (DialogObject.isChatDialog(dialog_id)) {
-                    chat = profileActivity.getMessagesController().getChat(-dialog_id);
-                    String text;
-                    if (ChatObject.isChannel(chat) && !chat.megagroup) {
-                        text = LocaleController.getString("ForwardRestrictionInfoChannel2", R.string.ForwardRestrictionInfoChannel2);
-                    }  else {
-                        text = LocaleController.getString("ForwardRestrictionInfoGroup2", R.string.ForwardRestrictionInfoGroup2);
-                    }
-                    Toast toast = Toast.makeText(getContext(), text, Toast.LENGTH_SHORT);
-                    toast.show();
-                }
+                onClickNoForwards(v);
             });
 
         } else {
