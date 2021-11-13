@@ -40,6 +40,7 @@ import org.telegram.tgnet.SerializedData;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.tgnet.TLRPC.ChatFull;
+import org.telegram.tgnet.TLRPC.InputPeer;
 import org.telegram.tgnet.TLRPC.Peer;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
@@ -5100,6 +5101,39 @@ public class MessagesController extends BaseController implements NotificationCe
                 getSecretChatHelper().declineSecretChat(encryptedId, revoke);
             }
         }
+    }
+
+    public void clearHistory(long did, InputPeer peer, boolean justClear, long minDate, long maxDate) {
+        TLRPC.TL_messages_deleteHistory req = new TLRPC.TL_messages_deleteHistory();
+        req.max_id = Integer.MAX_VALUE;
+        req.just_clear = justClear;
+        req.revoke = false;
+        if (minDate > 0) {
+            req.min_date = (int) (minDate);
+        }
+        if (maxDate > 0) {
+            req.max_date = (int) (maxDate);
+        }
+        if (peer == null) {
+            peer = getInputPeer(did);
+        }
+        req.peer = peer;
+        final InputPeer inputPeer = peer;
+        getConnectionsManager().sendRequest(req, (response, error) -> {
+            // if (newTaskId != 0) {
+            //     getMessagesStorage().removePendingTask(newTaskId);
+            // }
+            if (error == null) {
+                TLRPC.TL_messages_affectedHistory res = (TLRPC.TL_messages_affectedHistory) response;
+                if (res.offset > 0) {
+                    clearHistory(did, inputPeer, justClear, minDate, maxDate);
+                    // deleteDialog(did, 0, onlyHistory, max_id_delete_final, revoke, peerFinal, 0);
+                }
+                processNewDifferenceParams(-1, res.pts, -1, res.pts_count);
+                getMessagesStorage().deleteUserChatHistory(did, UserConfig.getInstance(currentAccount).getCurrentUser().id,
+                        req.min_date, req.max_date);
+            }
+        }, ConnectionsManager.RequestFlagInvokeAfter);
     }
 
     public void saveGif(Object parentObject, TLRPC.Document document) {

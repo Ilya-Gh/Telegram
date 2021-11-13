@@ -3601,6 +3601,54 @@ public class MessagesStorage extends BaseController {
         });
     }
 
+    public void deleteUserChatHistory(long dialogId, long fromId, int minDate, int maxDate) {
+        storageQueue.postRunnable(() -> {
+            try {
+                ArrayList<Integer> mids = new ArrayList<>();
+                String whereCause = "";
+                if (maxDate != 0 && minDate != 0) {
+                    whereCause = " AND date BETWEEN " + minDate + " AND " + maxDate;
+                }
+                SQLiteCursor cursor = database.queryFinalized("SELECT data FROM messages_v2 WHERE uid = " + dialogId + whereCause);
+                ArrayList<File> filesToDelete = new ArrayList<>();
+                ArrayList<String> namesToDelete = new ArrayList<>();
+                ArrayList<Pair<Long, Integer>> idsToDelete = new ArrayList<>();
+                try {
+                    while (cursor.next()) {
+                        NativeByteBuffer data = cursor.byteBufferValue(0);
+                        if (data != null) {
+                            TLRPC.Message message = TLRPC.Message.TLdeserialize(data, data.readInt32(false), false);
+                            if (message != null) {
+                            // message.readAttachPath(data, getUserConfig().clientUserId);
+                            // if (UserObject.isReplyUser(dialogId) && MessageObject.getPeerId(message.fwd_from.from_id) == fromId || MessageObject.getFromChatId(message) == fromId && message.id != 1) {
+                                mids.add(message.id);
+                                addFilesToDelete(message, filesToDelete, idsToDelete, namesToDelete, false);
+                            // }
+                            }
+                            data.reuse();
+                        }
+                    }
+                } catch (Exception e) {
+                    FileLog.e(e);
+                }
+                cursor.dispose();
+                deleteFromDownloadQueue(idsToDelete, true);
+                AndroidUtilities.runOnUIThread(() -> {
+                    getFileLoader().cancelLoadFiles(namesToDelete);
+                    getMessagesController().markDialogMessageAsDeleted(dialogId, mids);
+                });
+                markMessagesAsDeletedInternal(dialogId, mids, false, false);
+                updateDialogsWithDeletedMessagesInternal(dialogId, DialogObject.isChatDialog(dialogId) ? -dialogId : 0, mids, null);
+                getFileLoader().deleteFiles(filesToDelete, 0);
+                if (!mids.isEmpty()) {
+                    AndroidUtilities.runOnUIThread(() -> getNotificationCenter().postNotificationName(NotificationCenter.messagesDeleted, mids, DialogObject.isChatDialog(dialogId) ? -dialogId : 0, false));
+                }
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+        });
+    }
+
     private boolean addFilesToDelete(TLRPC.Message message, ArrayList<File> filesToDelete, ArrayList<Pair<Long, Integer>> ids, ArrayList<String> namesToDelete, boolean forceCache) {
         if (message == null) {
             return false;
@@ -3793,6 +3841,20 @@ public class MessagesStorage extends BaseController {
         storageQueue.postRunnable(() -> {
             try {
                 database.executeFast("DELETE FROM media_counts_v2 WHERE uid = " + did).stepThis().dispose();
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+        });
+    }
+
+    public void onDeleteQueryComplete(long did, int maxDate, int minDate) {
+        storageQueue.postRunnable(() -> {
+            try {
+                String whereCause = "";
+                if (maxDate != 0 && minDate != 0) {
+                    whereCause = " AND date BETWEEN " + minDate + " AND " + maxDate;
+                }
+                database.executeFast("DELETE FROM messages_v2 WHERE uid = " + did + whereCause).stepThis().dispose();
             } catch (Exception e) {
                 FileLog.e(e);
             }

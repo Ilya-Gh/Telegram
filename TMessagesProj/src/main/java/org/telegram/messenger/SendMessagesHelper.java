@@ -3138,13 +3138,26 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
         } else if (sendToPeer instanceof TLRPC.TL_inputPeerChannel) {
             TLRPC.Chat chat = getMessagesController().getChat(sendToPeer.channel_id);
             isChannel = chat != null && !chat.megagroup;
+            boolean shouldSendAsCurrent = true;
             if (isChannel && chat.has_link) {
                 TLRPC.ChatFull chatFull = getMessagesController().getChatFull(chat.id);
+
                 if (chatFull != null) {
                     linkedToGroup = chatFull.linked_chat_id;
+                    if (chatFull.default_send_as != null && chatFull.default_send_as.channel_id != sendToPeer.channel_id) {
+                        shouldSendAsCurrent = false;
+                    }
                 }
             }
-            anonymously = ChatObject.shouldSendAnonymously(chat);
+
+            TLRPC.ChatFull chatFull = getMessagesController().getChatFull(chat.id);
+            if (chatFull != null) {
+                linkedToGroup = chatFull.linked_chat_id;
+                if (chatFull.default_send_as != null && chatFull.default_send_as.channel_id != sendToPeer.channel_id) {
+                    shouldSendAsCurrent = false;
+                }
+            }
+            anonymously = ChatObject.shouldSendAnonymously(chat) && shouldSendAsCurrent;
         }
 
         try {

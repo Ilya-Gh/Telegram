@@ -158,6 +158,7 @@ import org.telegram.ui.Adapters.StickersAdapter;
 import org.telegram.ui.Cells.BotHelpCell;
 import org.telegram.ui.Cells.BotSwitchCell;
 import org.telegram.ui.Cells.ChatActionCell;
+import org.telegram.ui.Cells.ChatActionCell.ChatActionCellDelegate;
 import org.telegram.ui.Cells.ChatLoadingCell;
 import org.telegram.ui.Cells.ChatMessageCell;
 import org.telegram.ui.Cells.ChatUnreadCell;
@@ -251,6 +252,7 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.telegram.ui.MediaCalendarActivity.HistoryCallback;
 
 @SuppressWarnings("unchecked")
 public class ChatActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate, DialogsActivity.DialogsActivityDelegate, LocationActivity.LocationActivityDelegate, ChatAttachAlertDocumentLayout.DocumentSelectActivityDelegate {
@@ -23368,6 +23370,25 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
                             return;
                         }
                         chatActivityEnterView.didPressedBotButton(button, messageObject, messageObject);
+                    }
+
+                    @Override
+                    public void didPressDateLabel(int date) {
+                        if (!DialogObject.isUserDialog(dialog_id) && !DialogObject.isEncryptedDialog(dialog_id)) {
+                            return;
+                        }
+                        Bundle bundle = new Bundle();
+                        bundle.putLong("dialog_id", dialog_id);
+                        MediaCalendarActivity calendarActivity = new MediaCalendarActivity(bundle, 0, date, true);
+                        calendarActivity.setHistoryClearCallback(new HistoryCallback() {
+                            @Override
+                            public void onHistoryCleared() {
+                                // clearingHistory = false;
+                                // clearHistory(false, null);
+                                // chatAdapter.notifyDataSetChanged();
+                            }
+                        });
+                        presentFragment(calendarActivity);
                     }
                 });
             } else if (viewType == 2) {

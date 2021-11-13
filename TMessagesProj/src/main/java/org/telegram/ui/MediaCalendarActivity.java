@@ -1,26 +1,39 @@
 package org.telegram.ui;
 
 import android.content.Context;
+import android.content.DialogInterface;
+import android.content.res.Resources;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.RectF;
+import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
+import android.text.Spannable;
+import android.text.SpannableStringBuilder;
 import android.text.TextPaint;
+import android.text.style.StyleSpan;
 import android.util.Log;
 import android.util.SparseArray;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 
+import android.widget.TextView;
+import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
 import androidx.core.graphics.ColorUtils;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import java.util.Date;
+import java.util.HashMap;
+import java.util.concurrent.TimeUnit;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.DownloadController;
 import org.telegram.messenger.FileLoader;
@@ -31,16 +44,21 @@ import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
+import org.telegram.messenger.UserObject;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.ActionBar;
+import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.SimpleTextView;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.ActionBar.ThemeDescription;
+import org.telegram.ui.Cells.CheckBoxCell;
+import org.telegram.ui.Components.BackupImageView;
 import org.telegram.ui.Components.FlickerLoadingView;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.RecyclerListView;
+import org.telegram.ui.Components.ShareAlert;
 import org.telegram.ui.Components.SharedMediaLayout;
 
 import java.time.DayOfWeek;
@@ -48,6 +66,9 @@ import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Random;
+import org.telegram.ui.Components.TextStyleSpan;
+
+import static java.util.Calendar.DATE;
 
 public class MediaCalendarActivity extends BaseFragment {
 
@@ -60,11 +81,14 @@ public class MediaCalendarActivity extends BaseFragment {
     TextPaint textPaint2 = new TextPaint(Paint.ANTI_ALIAS_FLAG);
 
     Paint blackoutPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    Paint bluePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+    TextView pickerBottomLayout;
+    private View shadow;
 
     private long dialogId;
     private boolean loading;
     private boolean checkEnterItems;
-
 
     int startFromYear;
     int startFromMonth;
@@ -72,7 +96,13 @@ public class MediaCalendarActivity extends BaseFragment {
 
     CalendarAdapter adapter;
     Callback callback;
+    HistoryCallback historyCallback;
 
+    Date periodStartDate;
+    Date periodEndDate;
+
+    // SparseArray<RectF> selectedRegion = new SparseArray<>();
+    HashMap<Date, RectF> selectedRegion = new HashMap<Date, RectF>();
 
     SparseArray<SparseArray<PeriodDay>> messagesByYearMounth = new SparseArray<>();
     boolean endReached;
@@ -83,6 +113,9 @@ public class MediaCalendarActivity extends BaseFragment {
     private boolean isOpened;
     int selectedYear;
     int selectedMonth;
+
+    private boolean clearHistory;
+    private boolean selectRange;
 
     public MediaCalendarActivity(Bundle args, int photosVideosTypeFilter, int selectedDate) {
         super(args);
@@ -96,10 +129,33 @@ public class MediaCalendarActivity extends BaseFragment {
         }
     }
 
+    public MediaCalendarActivity(Bundle args, int photosVideosTypeFilter, int selectedDate, boolean clearHistory) {
+        this(args, photosVideosTypeFilter, selectedDate);
+        this.clearHistory = clearHistory;
+    }
+
     @Override
     public boolean onFragmentCreate() {
         dialogId = getArguments().getLong("dialog_id");
         return super.onFragmentCreate();
+    }
+
+    @Override
+    public boolean onBackPressed() {
+        if (selectRange) {
+            selectRange = false;
+            pickerBottomLayout.setText(LocaleController.getString("Selectdays", R.string.Selectdays));
+            pickerBottomLayout.setTextColor(getThemedColor(Theme.key_dialogTextBlue2));
+            actionBar.setTitle(LocaleController.getString("Calendar", R.string.Calendar));
+            actionBar.setBackButtonImage(R.drawable.ic_ab_back);
+
+            periodEndDate = null;
+            periodStartDate = null;
+            listView.getAdapter().notifyDataSetChanged();
+        } else {
+            finishFragment();
+        }
+        return false;
     }
 
     @Override
@@ -139,9 +195,10 @@ public class MediaCalendarActivity extends BaseFragment {
             }
         });
 
-        contentView.addView(listView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, 0, 0, 36, 0, 0));
+        contentView.addView(listView,
+                LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, 0, 0, 36, 0, 0));
 
-        final String[] daysOfWeek = new String[]{
+        final String[] daysOfWeek = new String[] {
                 LocaleController.getString("CalendarWeekNameShortMonday", R.string.CalendarWeekNameShortMonday),
                 LocaleController.getString("CalendarWeekNameShortTuesday", R.string.CalendarWeekNameShortTuesday),
                 LocaleController.getString("CalendarWeekNameShortWednesday", R.string.CalendarWeekNameShortWednesday),
@@ -164,22 +221,123 @@ public class MediaCalendarActivity extends BaseFragment {
                     float cy = (getMeasuredHeight() - AndroidUtilities.dp(2)) / 2f;
                     canvas.drawText(daysOfWeek[i], cx, cy + AndroidUtilities.dp(5), textPaint2);
                 }
-                headerShadowDrawable.setBounds(0, getMeasuredHeight() - AndroidUtilities.dp(3), getMeasuredWidth(), getMeasuredHeight());
+                headerShadowDrawable.setBounds(0, getMeasuredHeight() - AndroidUtilities.dp(3), getMeasuredWidth(),
+                        getMeasuredHeight());
                 headerShadowDrawable.draw(canvas);
             }
         };
 
-        contentView.addView(calendarSignatureView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 38, 0, 0, 0, 0, 0));
+        contentView.addView(calendarSignatureView,
+                LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 38, 0, 0, 0, 0, 0));
         actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
             @Override
             public void onItemClick(int id) {
                 if (id == -1) {
-                    finishFragment();
+                    onBackPressed();
                 }
             }
         });
 
         fragmentView = contentView;
+
+        if (clearHistory) {
+            FrameLayout.LayoutParams frameLayoutParams;
+            frameLayoutParams =
+                    new FrameLayout.LayoutParams(LayoutHelper.MATCH_PARENT, AndroidUtilities.getShadowHeight(),
+                            Gravity.BOTTOM | Gravity.LEFT);
+            frameLayoutParams.bottomMargin = AndroidUtilities.dp(48);
+            shadow = new View(context);
+            shadow.setBackgroundColor(getThemedColor(Theme.key_dialogShadowLine));
+            contentView.addView(shadow, frameLayoutParams);
+
+            pickerBottomLayout = new TextView(context);
+            pickerBottomLayout.setBackgroundDrawable(
+                    Theme.createSelectorWithBackgroundDrawable(getThemedColor(Theme.key_dialogBackground),
+                            getThemedColor(Theme.key_listSelector)));
+            pickerBottomLayout.setTextColor(getThemedColor(Theme.key_dialogTextBlue2));
+            pickerBottomLayout.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
+            pickerBottomLayout.setPadding(AndroidUtilities.dp(18), 0, AndroidUtilities.dp(18), 0);
+            pickerBottomLayout.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+            pickerBottomLayout.setAllCaps(true);
+            pickerBottomLayout.setGravity(Gravity.CENTER);
+            pickerBottomLayout.setText(LocaleController.getString("Selectdays", R.string.Selectdays));
+            pickerBottomLayout.setOnClickListener(v -> {
+                if (!selectRange) {
+                    pickerBottomLayout.setText(LocaleController.getString("ClearHistory", R.string.ClearHistory));
+                    pickerBottomLayout.setTextColor(getThemedColor(Theme.key_dialogTextRed2));
+                    actionBar.setTitle(LocaleController.getString("Selectdays", R.string.Selectdays));
+                    //TODO animate??
+                    actionBar.setBackButtonImage(R.drawable.ic_close_white);
+                    selectRange = !selectRange;
+                } else {
+                    if (periodStartDate == null) {
+                        Toast.makeText(context, "Please select history range", Toast.LENGTH_SHORT).show();
+                    } else {
+
+                        AlertDialog.Builder builder = new AlertDialog.Builder(context, getResourceProvider());
+                        builder.setTitle(LocaleController.getString("AreYouSureDeleteHistory",
+                                R.string.AreYouSureDeleteHistory));
+                        if (periodEndDate == null) {
+                            builder.setSubtitle(LocaleController.getString("AreYouSureDeleteHistoryMessageDay",
+                                    R.string.AreYouSureDeleteHistoryMessageDay));
+                        } else {
+                            long daysSelected =
+                                    TimeUnit.DAYS.convert(periodEndDate.getTime() - periodStartDate.getTime(),
+                                            TimeUnit.MILLISECONDS) + 1;
+
+                            builder.setSubtitle(makeSectionOfTextBold(
+                                    LocaleController.formatString("AreYouSureDeleteHistoryMessageDays",
+                                            R.string.AreYouSureDeleteHistoryMessageDays, daysSelected),
+                                    LocaleController.formatString("AreYouSureDeleteHistoryMessageDaysSpan",
+                                            R.string.AreYouSureDeleteHistoryMessageDaysSpan, daysSelected)));
+                        }
+
+                        CheckBoxCell[] cell = new CheckBoxCell[1];
+                        cell[0] = new CheckBoxCell(context, 1, getResourceProvider());
+                        cell[0].setBackgroundDrawable(Theme.getSelectorDrawable(false));
+                        cell[0].setText(LocaleController.formatString("DeleteMessagesOptionAlso",
+                                R.string.DeleteMessagesOptionAlso,
+                                UserObject.getFirstName(getMessagesController().getUser(dialogId))), "", false, false);
+                        FrameLayout frameLayout = new FrameLayout(context);
+                        final boolean[] deleteForAll = new boolean[1];
+                        cell[0].setPadding(LocaleController.isRTL ? AndroidUtilities.dp(16) : AndroidUtilities.dp(8), 0,
+                                LocaleController.isRTL ? AndroidUtilities.dp(8) : AndroidUtilities.dp(16), 0);
+                        frameLayout.addView(cell[0],
+                                LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.BOTTOM | Gravity.LEFT,
+                                        0, 0, 0, 0));
+                        cell[0].setOnClickListener(v2 -> {
+                            CheckBoxCell cell1 = (CheckBoxCell) v2;
+                            deleteForAll[0] = !deleteForAll[0];
+                            cell1.setChecked(deleteForAll[0], true);
+                        });
+                        builder.setView(frameLayout);
+                        builder.setNegativeButton(LocaleController.getString("Cancel", R.string.Cancel), null);
+                        builder.setPositiveButton(LocaleController.getString("Delete", R.string.Delete),
+                                (dialog, which) -> {
+                                    if (periodEndDate == null) {
+                                        getMessagesController().clearHistory(dialogId, null, !deleteForAll[0],
+                                                (int) periodStartDate.getTime() / 1000, (int) periodStartDate.getTime() / 1000);
+                                    } else {
+                                        getMessagesController().clearHistory(dialogId, null, !deleteForAll[0],
+                                                periodStartDate.getTime()  / 1000 , periodEndDate.getTime()  / 1000 );
+                                    }
+                                    // CLEAR history here;
+                                    historyCallback.onHistoryCleared();
+                                    onBackPressed();
+                                });
+
+                        AlertDialog alertDialog = builder.create();
+                        alertDialog.show();
+                        TextView button = (TextView) alertDialog.getButton(DialogInterface.BUTTON_POSITIVE);
+                        if (button != null) {
+                            button.setTextColor(Theme.getColor(Theme.key_dialogTextRed2));
+                        }
+                    }
+                }
+            });
+            contentView.addView(pickerBottomLayout,
+                    LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.LEFT | Gravity.BOTTOM));
+        }
 
         Calendar calendar = Calendar.getInstance();
         startFromYear = calendar.get(Calendar.YEAR);
@@ -192,7 +350,6 @@ public class MediaCalendarActivity extends BaseFragment {
         if (monthCount < 3) {
             monthCount = 3;
         }
-
 
         loadNext();
         updateColors();
@@ -210,6 +367,32 @@ public class MediaCalendarActivity extends BaseFragment {
         actionBar.setBackButtonImage(R.drawable.ic_ab_back);
         actionBar.setItemsColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText), false);
         actionBar.setItemsBackgroundColor(Theme.getColor(Theme.key_listSelector), false);
+    }
+
+    public static SpannableStringBuilder makeSectionOfTextBold(String text, String textToBold) {
+
+        SpannableStringBuilder builder = new SpannableStringBuilder();
+
+        if (textToBold.length() > 0 && !textToBold.trim().equals("")) {
+
+            String testText = text.toLowerCase();
+            String testTextToBold = textToBold.toLowerCase();
+            int startingIndex = testText.indexOf(testTextToBold);
+            int endingIndex = startingIndex + testTextToBold.length();
+
+            if (startingIndex < 0 || endingIndex < 0) {
+                return builder.append(text);
+            } else if (startingIndex >= 0 && endingIndex >= 0) {
+                builder.append(text);
+                TextStyleSpan.TextStyleRun run = new TextStyleSpan.TextStyleRun();
+                run.flags |= TextStyleSpan.FLAG_STYLE_BOLD;
+                builder.setSpan(new TextStyleSpan(run), startingIndex, endingIndex, 0);
+            }
+        } else {
+            return builder.append(text);
+        }
+
+        return builder;
     }
 
     private void loadNext() {
@@ -256,7 +439,6 @@ public class MediaCalendarActivity extends BaseFragment {
                     if (month < minMontYear || minMontYear == 0) {
                         minMontYear = month;
                     }
-
                 }
 
                 loading = false;
@@ -297,7 +479,8 @@ public class MediaCalendarActivity extends BaseFragment {
                     listMinMonth = currentMonth;
                 }
             }
-        };
+        }
+        ;
         int min1 = (minMontYear / 100 * 12) + minMontYear % 100;
         int min2 = (listMinMonth / 100 * 12) + listMinMonth % 100;
         if (min1 + 3 >= min2) {
@@ -350,8 +533,11 @@ public class MediaCalendarActivity extends BaseFragment {
         int cellCount;
         int startMonthTime;
 
+        Calendar calendar = Calendar.getInstance();
+
         SparseArray<PeriodDay> messagesByDays = new SparseArray<>();
         SparseArray<ImageReceiver> imagesByDays = new SparseArray<>();
+        SparseArray<RectF> drawRegionByDays = new SparseArray<>();
 
         SparseArray<PeriodDay> animatedFromMessagesByDays = new SparseArray<>();
         SparseArray<ImageReceiver> animatedFromImagesByDays = new SparseArray<>();
@@ -375,6 +561,11 @@ public class MediaCalendarActivity extends BaseFragment {
             currentYear = year;
             currentMonthInYear = monthInYear;
             this.messagesByDays = messagesByDays;
+            calendar.set(Calendar.HOUR_OF_DAY, 0);
+            calendar.set(Calendar.MINUTE, 0);
+            calendar.set(Calendar.SECOND, 0);
+            calendar.set(Calendar.MILLISECOND, 0);
+            calendar.set(currentYear, currentMonthInYear, 0);
 
             if (dateChanged) {
                 if (imagesByDays != null) {
@@ -409,28 +600,47 @@ public class MediaCalendarActivity extends BaseFragment {
                             }
                             if (thumb != null) {
                                 if (messageObject.strippedThumb != null) {
-                                    receiver.setImage(ImageLocation.getForDocument(qualityThumb, document), "44_44", messageObject.strippedThumb, null, messageObject, 0);
+                                    receiver.setImage(ImageLocation.getForDocument(qualityThumb, document), "44_44",
+                                            messageObject.strippedThumb, null, messageObject, 0);
                                 } else {
-                                    receiver.setImage(ImageLocation.getForDocument(qualityThumb, document), "44_44", ImageLocation.getForDocument(thumb, document), "b", (String) null, messageObject, 0);
+                                    receiver.setImage(ImageLocation.getForDocument(qualityThumb, document), "44_44",
+                                            ImageLocation.getForDocument(thumb, document), "b", (String) null,
+                                            messageObject, 0);
                                 }
                             }
-                        } else if (messageObject.messageOwner.media instanceof TLRPC.TL_messageMediaPhoto && messageObject.messageOwner.media.photo != null && !messageObject.photoThumbs.isEmpty()) {
-                            TLRPC.PhotoSize currentPhotoObjectThumb = FileLoader.getClosestPhotoSizeWithSize(messageObject.photoThumbs, 50);
-                            TLRPC.PhotoSize currentPhotoObject = FileLoader.getClosestPhotoSizeWithSize(messageObject.photoThumbs, 320, false, currentPhotoObjectThumb, false);
-                            if (messageObject.mediaExists || DownloadController.getInstance(currentAccount).canDownloadMedia(messageObject)) {
+                        } else if (messageObject.messageOwner.media instanceof TLRPC.TL_messageMediaPhoto
+                                && messageObject.messageOwner.media.photo != null
+                                && !messageObject.photoThumbs.isEmpty()) {
+                            TLRPC.PhotoSize currentPhotoObjectThumb =
+                                    FileLoader.getClosestPhotoSizeWithSize(messageObject.photoThumbs, 50);
+                            TLRPC.PhotoSize currentPhotoObject =
+                                    FileLoader.getClosestPhotoSizeWithSize(messageObject.photoThumbs, 320, false,
+                                            currentPhotoObjectThumb, false);
+                            if (messageObject.mediaExists || DownloadController.getInstance(currentAccount)
+                                    .canDownloadMedia(messageObject)) {
                                 if (currentPhotoObject == currentPhotoObjectThumb) {
                                     currentPhotoObjectThumb = null;
                                 }
                                 if (messageObject.strippedThumb != null) {
-                                    receiver.setImage(ImageLocation.getForObject(currentPhotoObject, messageObject.photoThumbsObject), "44_44", null, null, messageObject.strippedThumb, currentPhotoObject != null ? currentPhotoObject.size : 0, null, messageObject, messageObject.shouldEncryptPhotoOrVideo() ? 2 : 1);
+                                    receiver.setImage(ImageLocation.getForObject(currentPhotoObject,
+                                                    messageObject.photoThumbsObject), "44_44", null, null,
+                                            messageObject.strippedThumb,
+                                            currentPhotoObject != null ? currentPhotoObject.size : 0, null,
+                                            messageObject, messageObject.shouldEncryptPhotoOrVideo() ? 2 : 1);
                                 } else {
-                                    receiver.setImage(ImageLocation.getForObject(currentPhotoObject, messageObject.photoThumbsObject), "44_44", ImageLocation.getForObject(currentPhotoObjectThumb, messageObject.photoThumbsObject), "b", currentPhotoObject != null ? currentPhotoObject.size : 0, null, messageObject, messageObject.shouldEncryptPhotoOrVideo() ? 2 : 1);
+                                    receiver.setImage(ImageLocation.getForObject(currentPhotoObject,
+                                                    messageObject.photoThumbsObject), "44_44",
+                                            ImageLocation.getForObject(currentPhotoObjectThumb,
+                                                    messageObject.photoThumbsObject), "b",
+                                            currentPhotoObject != null ? currentPhotoObject.size : 0, null,
+                                            messageObject, messageObject.shouldEncryptPhotoOrVideo() ? 2 : 1);
                                 }
                             } else {
                                 if (messageObject.strippedThumb != null) {
                                     receiver.setImage(null, null, messageObject.strippedThumb, null, messageObject, 0);
                                 } else {
-                                    receiver.setImage(null, null, ImageLocation.getForObject(currentPhotoObjectThumb, messageObject.photoThumbsObject), "b", (String) null, messageObject, 0);
+                                    receiver.setImage(null, null, ImageLocation.getForObject(currentPhotoObjectThumb,
+                                            messageObject.photoThumbsObject), "b", (String) null, messageObject, 0);
                                 }
                             }
                         }
@@ -446,7 +656,7 @@ public class MediaCalendarActivity extends BaseFragment {
             Calendar calendar = Calendar.getInstance();
             calendar.set(year, monthInYear, 0);
             startDayOfWeek = (calendar.get(Calendar.DAY_OF_WEEK) + 6) % 7;
-            startMonthTime= (int) (calendar.getTimeInMillis() / 1000L);
+            startMonthTime = (int) (calendar.getTimeInMillis() / 1000L);
 
             int totalColumns = daysInMonth + startDayOfWeek;
             cellCount = (int) (totalColumns / 7f) + (totalColumns % 7 == 0 ? 0 : 1);
@@ -456,7 +666,8 @@ public class MediaCalendarActivity extends BaseFragment {
 
         @Override
         protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-            super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(cellCount * (44 + 8) + 44), MeasureSpec.EXACTLY));
+            super.onMeasure(widthMeasureSpec,
+                    MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(cellCount * (44 + 8) + 44), MeasureSpec.EXACTLY));
         }
 
         boolean pressed;
@@ -471,13 +682,72 @@ public class MediaCalendarActivity extends BaseFragment {
                 pressedY = event.getY();
             } else if (event.getAction() == MotionEvent.ACTION_UP) {
                 if (pressed) {
-                    for (int i = 0; i < imagesByDays.size(); i++) {
-                        if (imagesByDays.valueAt(i).getDrawRegion().contains(pressedX, pressedY)) {
-                            if (callback != null) {
-                                PeriodDay periodDay = messagesByDays.valueAt(i);
-                                callback.onDateSelected(periodDay.messageObject.getId(), periodDay.startOffset);
-                                finishFragment();
-                                break;
+                    if (clearHistory) {
+
+                        for (int i = 0; i < drawRegionByDays.size(); i++) {
+                            if (drawRegionByDays.valueAt(i).contains(pressedX, pressedY)) {
+                                if (selectRange) {
+
+
+                                    if (periodStartDate == null) {
+                                        calendar.set(currentYear, currentMonthInYear, i + 1);
+                                        periodStartDate = calendar.getTime();
+
+                                        if (periodStartDate.after(new Date())) {
+                                            periodStartDate = null;
+                                            return pressed;
+                                        }
+
+
+
+                                        // selectedRegion.put(i, drawRegionByDays.valueAt(i));
+
+                                        actionBar.setTitle(
+                                                LocaleController.getString("OneDaySelected", R.string.OneDaySelected));
+
+                                        invalidate();
+                                    } else {
+                                        calendar.set(currentYear, currentMonthInYear, i + 1);
+                                        periodEndDate = calendar.getTime();
+
+                                        if (periodEndDate.equals(periodStartDate)) {
+                                            periodEndDate = null;
+                                            actionBar.setTitle(LocaleController.getString("OneDaySelected",
+                                                    R.string.OneDaySelected));
+                                            invalidate();
+                                        } else {
+                                            if (periodEndDate.after(new Date())) {
+                                                periodEndDate = null;
+                                                return pressed;
+                                            }
+
+
+                                            if (periodStartDate.after(periodEndDate)) {
+                                                Date temp = periodEndDate;
+                                                periodEndDate = periodStartDate;
+                                                periodStartDate = temp;
+                                            }
+
+                                            long daysSelected = TimeUnit.DAYS.convert(
+                                                    periodEndDate.getTime() - periodStartDate.getTime(),
+                                                    TimeUnit.MILLISECONDS) + 1;
+                                            actionBar.setTitle(LocaleController.formatString("ManyDaysSelected",
+                                                    R.string.ManyDaysSelected, daysSelected));
+                                            listView.getAdapter().notifyDataSetChanged();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        for (int i = 0; i < imagesByDays.size(); i++) {
+                            if (imagesByDays.valueAt(i).getDrawRegion().contains(pressedX, pressedY)) {
+                                if (callback != null) {
+                                    PeriodDay periodDay = messagesByDays.valueAt(i);
+                                    callback.onDateSelected(periodDay.messageObject.getId(), periodDay.startOffset);
+                                    finishFragment();
+                                    break;
+                                }
                             }
                         }
                     }
@@ -488,6 +758,7 @@ public class MediaCalendarActivity extends BaseFragment {
             }
             return pressed;
         }
+        
 
         @Override
         protected void onDraw(Canvas canvas) {
@@ -502,6 +773,45 @@ public class MediaCalendarActivity extends BaseFragment {
                 float cx = xStep * currentColumn + xStep / 2f;
                 float cy = yStep * currentCell + yStep / 2f + AndroidUtilities.dp(44);
                 int nowTime = (int) (System.currentTimeMillis() / 1000L);
+                int imageW = AndroidUtilities.dp(44);
+                int imageH = AndroidUtilities.dp(44);
+                float imageX = cx - AndroidUtilities.dp(44) / 2f;
+                float imageY = cy - AndroidUtilities.dp(44) / 2f;
+
+                // drawRegion.set(imageX, imageY, imageX + imageW, imageY + imageH);
+                RectF rectF = new RectF();
+                rectF.set(imageX, imageY, imageX + imageW, imageY + imageH);
+                drawRegionByDays.put(i, rectF);
+
+                calendar.set(DATE, i + 1);
+                Date currentDate = calendar.getTime();
+
+                bluePaint.setColor(0xFFedf6fb);
+
+                if (periodStartDate != null && currentDate.getTime() == periodStartDate.getTime() && (
+                        periodStartDate.equals(periodEndDate)
+                                || periodEndDate == null)) {
+                    canvas.drawCircle(cx, cy, AndroidUtilities.dp(44) / 2f, bluePaint);
+                } else if (periodEndDate != null && periodStartDate != null) {
+                    if (currentDate.getTime() < periodEndDate.getTime()
+                            && currentDate.getTime() > periodStartDate.getTime()) {
+                        // if (selectedRegion.get(calendar.getTime()) != null) {
+                        RectF toDraw = new RectF(rectF.left - AndroidUtilities.dp(4f), rectF.top,
+                                rectF.right + AndroidUtilities.dp(4), rectF.bottom);
+                        canvas.drawRect(toDraw, bluePaint);
+                    }
+                    if (currentDate.getTime() == periodEndDate.getTime()
+                            || currentDate.getTime() == periodStartDate.getTime()) {
+                        canvas.drawCircle(cx, cy, AndroidUtilities.dp(44) / 2f, bluePaint);
+                        RectF toDraw;
+                        if (currentDate.getTime() == periodStartDate.getTime()) {
+                            toDraw = new RectF(cx, rectF.top, rectF.right + AndroidUtilities.dp(4), rectF.bottom);
+                        } else {
+                            toDraw = new RectF(rectF.left - AndroidUtilities.dp(4f), rectF.top, cx, rectF.bottom);
+                        }
+                        canvas.drawRect(toDraw, bluePaint);
+                    }
+                }
                 if (nowTime < startMonthTime + (i + 1) * 86400) {
                     int oldAlpha = textPaint.getAlpha();
                     textPaint.setAlpha((int) (oldAlpha * 0.3f));
@@ -534,12 +844,15 @@ public class MediaCalendarActivity extends BaseFragment {
                         if (alpha != 1f) {
                             canvas.save();
                             float s = 0.8f + 0.2f * alpha;
-                            canvas.scale(s, s,cx, cy);
+                            canvas.scale(s, s, cx, cy);
                         }
                         imagesByDays.get(i).setAlpha(messagesByDays.get(i).enterAlpha);
-                        imagesByDays.get(i).setImageCoords(cx - AndroidUtilities.dp(44) / 2f, cy - AndroidUtilities.dp(44) / 2f, AndroidUtilities.dp(44), AndroidUtilities.dp(44));
+                        imagesByDays.get(i)
+                                .setImageCoords(cx - AndroidUtilities.dp(44) / 2f, cy - AndroidUtilities.dp(44) / 2f,
+                                        AndroidUtilities.dp(44), AndroidUtilities.dp(44));
                         imagesByDays.get(i).draw(canvas);
-                        blackoutPaint.setColor(ColorUtils.setAlphaComponent(Color.BLACK, (int) (messagesByDays.get(i).enterAlpha * 80)));
+                        blackoutPaint.setColor(ColorUtils.setAlphaComponent(Color.BLACK,
+                                (int) (messagesByDays.get(i).enterAlpha * 80)));
                         canvas.drawCircle(cx, cy, AndroidUtilities.dp(44) / 2f, blackoutPaint);
                         messagesByDays.get(i).wasDrawn = true;
                         if (alpha != 1f) {
@@ -559,7 +872,6 @@ public class MediaCalendarActivity extends BaseFragment {
                     } else {
                         canvas.drawText(Integer.toString(i + 1), cx, cy + AndroidUtilities.dp(5), activeTextPaint);
                     }
-
                 } else {
                     canvas.drawText(Integer.toString(i + 1), cx, cy + AndroidUtilities.dp(5), textPaint);
                 }
@@ -599,8 +911,16 @@ public class MediaCalendarActivity extends BaseFragment {
         this.callback = callback;
     }
 
+    public void setHistoryClearCallback(HistoryCallback callback) {
+        this.historyCallback = callback;
+    }
+
     public interface Callback {
         void onDateSelected(int messageId, int startOffset);
+    }
+
+    public interface HistoryCallback {
+        void onHistoryCleared();
     }
 
     private class PeriodDay {
@@ -614,17 +934,17 @@ public class MediaCalendarActivity extends BaseFragment {
     @Override
     public ArrayList<ThemeDescription> getThemeDescriptions() {
 
-        ThemeDescription.ThemeDescriptionDelegate descriptionDelegate = new ThemeDescription.ThemeDescriptionDelegate() {
-            @Override
-            public void didSetColor() {
-                updateColors();
-            }
-        };
+        ThemeDescription.ThemeDescriptionDelegate descriptionDelegate =
+                new ThemeDescription.ThemeDescriptionDelegate() {
+                    @Override
+                    public void didSetColor() {
+                        updateColors();
+                    }
+                };
         ArrayList<ThemeDescription> themeDescriptions = new ArrayList<>();
         new ThemeDescription(null, 0, null, null, null, descriptionDelegate, Theme.key_windowBackgroundWhite);
         new ThemeDescription(null, 0, null, null, null, descriptionDelegate, Theme.key_windowBackgroundWhiteBlackText);
         new ThemeDescription(null, 0, null, null, null, descriptionDelegate, Theme.key_listSelector);
-
 
         return super.getThemeDescriptions();
     }

@@ -14,6 +14,7 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
+import android.os.Bundle;
 import android.text.Layout;
 import android.text.Spannable;
 import android.text.StaticLayout;
@@ -42,7 +43,10 @@ import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.AvatarDrawable;
+import org.telegram.ui.Components.SharedMediaLayout;
+import org.telegram.ui.Components.SharedMediaLayout.Period;
 import org.telegram.ui.Components.URLSpanNoUnderline;
+import org.telegram.ui.MediaCalendarActivity;
 import org.telegram.ui.PhotoViewer;
 
 import java.util.ArrayList;
@@ -65,6 +69,9 @@ public class ChatActionCell extends BaseCell implements DownloadController.FileD
         }
 
         default void didPressReplyMessage(ChatActionCell cell, int id) {
+        }
+
+        default void didPressDateLabel(int date) {
         }
 
         default void needOpenInviteLink(TLRPC.TL_chatInviteExported invite) {
@@ -394,6 +401,13 @@ public class ChatActionCell extends BaseCell implements DownloadController.FileD
                     pressedLink = null;
                 }
             }
+        }
+        
+        if (!result && currentMessageObject!= null && currentMessageObject.isDateObject) {
+            if (delegate != null) {
+                delegate.didPressDateLabel(customDate);
+            }
+            result = true;
         }
 
         if (!result) {

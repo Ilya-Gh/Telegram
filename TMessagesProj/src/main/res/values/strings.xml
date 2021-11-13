@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="AppName">Telegram</string>
+    <string name="AppName">Telegram IlyaGh</string>
     <string name="AppNameBeta">Telegram Beta</string>
     <string name="LanguageName">English</string>
     <string name="English">English</string>
@@ -1095,6 +1095,7 @@
     <string name="ChatYourSelfDescription4">Use search to quickly find things</string>
     <string name="ChatYourSelfTitle">Your cloud storage</string>
     <string name="JumpToDate">Jump to Date</string>
+    <string name="Selectdays">Select Days</string>
     <string name="DeleteForUser">Delete for %1$s</string>
     <string name="DeleteForAll">Delete for all members</string>
     <string name="TextCopied">Text copied to clipboard</string>
@@ -2763,6 +2764,10 @@
     <string name="AreYouSureDeletePhotoTitle">Delete photo</string>
     <string name="AreYouSureDeletePhoto">Are you sure you want to delete this photo?</string>
     <string name="AreYouSureDeleteVideoTitle">Delete video</string>
+    <string name="AreYouSureDeleteHistory">Delete messages</string>
+    <string name="AreYouSureDeleteHistoryMessageDay">Are you sure you want to delete all messages for the selected day?</string>
+    <string name="AreYouSureDeleteHistoryMessageDays">Are you sure you want to delete all messages for the %s selected days?</string>
+    <string name="AreYouSureDeleteHistoryMessageDaysSpan">%s selected days</string>
     <string name="AreYouSureDeleteVideo">Are you sure you want to delete this video?</string>
     <string name="AreYouSureDeleteGIFTitle">Delete GIF</string>
     <string name="AreYouSureDeleteGIF">Are you sure you want to delete this GIF?</string>
@@ -4756,6 +4761,8 @@
     <string name="ChatThemeDayNightSwitchTooltip">Tap here to view how **%s** will see this theme when using night mode.</string>
     <string name="AttachMenu">Attach...</string>
     <string name="Calendar">Calendar</string>
+    <string name="OneDaySelected">1 day</string>
+    <string name="ManyDaysSelected">%s days</string>
     <string name="MediaZoomIn">Zoom in</string>
     <string name="MediaZoomOut">Zoom out</string>
     <string name="MediaShowPhotos">Show photos</string>

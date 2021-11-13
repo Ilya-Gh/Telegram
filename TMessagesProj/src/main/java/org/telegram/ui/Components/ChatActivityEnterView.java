@@ -1743,8 +1743,6 @@ public class ChatActivityEnterView extends FrameLayout implements NotificationCe
         textFieldContainer.addView(frameLayout, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM, 0, 0, 48, 0));
 
 
-        // TODO define logic here
-        // shouldShowAvatarSendAs = true;
         avatarDrawable = new AvatarDrawable();
         for (int a = 0; a < 2; a++) {
             avatarImageView[a] = new BackupImageView(context);
@@ -3724,10 +3722,6 @@ public class ChatActivityEnterView extends FrameLayout implements NotificationCe
         if (parentFragment == null) {
             return;
         }
-        TLRPC.Chat chat = parentFragment.getCurrentChat();
-        TLRPC.User user = parentFragment.getCurrentUser();
-
-
         final AlertDialog progressDialog = new AlertDialog(getContext(), 3);
         TLRPC.TL_channels_getSendAs req = new TLRPC.TL_channels_getSendAs();
         req.peer = accountInstance.getMessagesController().getInputPeer(dialog_id);
@@ -3743,20 +3737,12 @@ public class ChatActivityEnterView extends FrameLayout implements NotificationCe
                     TLRPC.Peer peer = res.peers.get(0);
                     // delegate.didSelectChat(peer, false, false);
                     // TODO peer use as selecred
-
-                    TLObject object;
-                    if (selectedPeer.channel_id == 0) {
-                        object = MessagesController.getInstance(currentAccount).getUser(selectedPeer.user_id);
-
-                    } else {
-                        object = MessagesController.getInstance(currentAccount).getChat(selectedPeer.channel_id);
-
-                    }
-                    avatarDrawable.setInfo(object);
-                    avatarImageView[0].setForUserOrChat(object, avatarDrawable);
-                    avatarImageView[0].setVisibility(VISIBLE);
+                    // avatarDrawable.setInfo(object);
+                    // avatarImageView[0].setForUserOrChat(object, avatarDrawable);
+                    avatarImageView[0].setVisibility(GONE);
+                    avatarImageView[1].setVisibility(GONE);
+                    shouldShowAvatarSendAs = false;
                     accountInstance.getMessagesController().saveDefaultSendAs(dialog_id, peer);
-
                     // animateAvatartButton();
                     return;
                 }
@@ -3858,6 +3844,7 @@ public class ChatActivityEnterView extends FrameLayout implements NotificationCe
                         avatarImageView[0].setForUserOrChat(object, avatarDrawable);
                         avatarImageView[0].setVisibility(VISIBLE);
                         accountInstance.getMessagesController().saveDefaultSendAs(dialog_id, selectedPeer);
+                        updateFieldHint(false, selectedPeer.channel_id == -dialog_id);
 
                         if (selectSendAsPopupWindow != null && selectSendAsPopupWindow.isShowing()) {
                             selectSendAsPopupWindow.dismiss();
@@ -4157,46 +4144,84 @@ public class ChatActivityEnterView extends FrameLayout implements NotificationCe
         }
         setSlowModeTimer(chatInfo.slowmode_next_send_date);
 
+        boolean localShouldShowAvatartSendAs = false;
+
         if (DialogObject.isChatDialog(dialog_id)) {
             TLRPC.Chat chat = accountInstance.getMessagesController().getChat(-dialog_id);
             if (chat.megagroup && !TextUtils.isEmpty(chat.username) || chat.megagroup && chat.has_geo) {
-                shouldShowAvatarSendAs = true;
+                localShouldShowAvatartSendAs = true;
             } else  if (chat.megagroup && chat.has_link) {
-                shouldShowAvatarSendAs = true;
+                localShouldShowAvatartSendAs = true;
             }  else {
-                shouldShowAvatarSendAs = false;
+                localShouldShowAvatartSendAs = false;
             }
             // if (isChannel && !chat.creator && (chat.admin_rights == null || !chat.admin_rights.post_messages)) {
             //     hasRecordVideo = false;
             // }
         }
 
-        if (shouldShowAvatarSendAs) {
-            // avatarImageView[0].
-            // avatarImageView[0].setImage(null, "50_50", avatarDrawable, );
-
-            TLObject object;
-
-
-            if (chatInfo.default_send_as == null) {
-                object =  UserConfig.getInstance(currentAccount).getCurrentUser();
-            } else {
-
-                if (chatInfo.default_send_as.channel_id == 0) {
-                    object = MessagesController.getInstance(currentAccount).getUser(chatInfo.default_send_as.user_id);
-                } else {
-                    object =MessagesController.getInstance(currentAccount).getChat(chatInfo.default_send_as.channel_id);
-                }
-            }
-            avatarDrawable.setInfo(object);
-            avatarImageView[0].setForUserOrChat(object, avatarDrawable);
-            avatarImageView[0].setVisibility(VISIBLE);
-            // avatarImageView[1].setVisibility(GONE);
-        }   else {
-            shouldShowAvatarSendAs = false;
-            avatarImageView[0].setVisibility(GONE);
-            avatarImageView[1].setVisibility(GONE);
+        if (!localShouldShowAvatartSendAs) {
+             return;
         }
+
+
+        TLRPC.TL_channels_getSendAs req = new TLRPC.TL_channels_getSendAs();
+        req.peer = accountInstance.getMessagesController().getInputPeer(dialog_id);
+        int reqId = accountInstance.getConnectionsManager().sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
+            if (response != null) {
+                TLRPC.TL_channels_sendAsPeers res = (TLRPC.TL_channels_sendAsPeers) response;
+                if (res.peers.size() == 1) {
+                    TLRPC.Peer peer = res.peers.get(0);
+                    // delegate.didSelectChat(peer, false, false);
+                    // TODO peer use as selecred
+                    // avatarDrawable.setInfo(object);
+                    // avatarImageView[0].setForUserOrChat(object, avatarDrawable);
+                    avatarImageView[0].setVisibility(GONE);
+                    avatarImageView[1].setVisibility(GONE);
+                    shouldShowAvatarSendAs = false;
+                    accountInstance.getMessagesController().saveDefaultSendAs(dialog_id, peer);
+                    // animateAvatartButton();
+                    return;
+                }
+
+                // avatarImageView[0].
+                // avatarImageView[0].setImage(null, "50_50", avatarDrawable, );
+
+                TLObject object;
+                if (chatInfo.default_send_as == null) {
+                    object =  UserConfig.getInstance(currentAccount).getCurrentUser();
+                } else {
+
+                    if (chatInfo.default_send_as.channel_id == 0) {
+                        object = MessagesController.getInstance(currentAccount).getUser(chatInfo.default_send_as.user_id);
+                    } else {
+                        object =MessagesController.getInstance(currentAccount).getChat(chatInfo.default_send_as.channel_id);
+                    }
+                }
+                avatarDrawable.setInfo(object);
+                avatarImageView[0].setForUserOrChat(object, avatarDrawable);
+                avatarImageView[0].setVisibility(VISIBLE);
+                shouldShowAvatarSendAs = true;
+                if (emojiView != null) {
+                    emojiView.invalidateViews();
+                }
+                if (botKeyboardView != null) {
+                    botKeyboardView.invalidateViews();
+                }
+                if (messageEditText != null) {
+                    messageEditText.postInvalidate();
+                }
+                updateFieldHint(false);
+                // avatarImageView[1].setVisibility(GONE);
+            }   else {
+                shouldShowAvatarSendAs = false;
+                avatarImageView[0].setVisibility(GONE);
+                avatarImageView[1].setVisibility(GONE);
+
+            }
+
+
+        }));
 
 
     }
@@ -4243,6 +4268,15 @@ public class ChatActivityEnterView extends FrameLayout implements NotificationCe
     }
 
     private void updateFieldHint(boolean animated) {
+        boolean sendAsSameChat = true;
+        TLRPC.ChatFull fullChat = accountInstance.getMessagesController().getChatFull(-dialog_id);
+        if (fullChat != null && fullChat.default_send_as != null && fullChat.default_send_as.channel_id != -dialog_id)  {
+            sendAsSameChat = false;
+        }
+        updateFieldHint(animated, sendAsSameChat);
+    }
+
+    private void updateFieldHint(boolean animated, boolean sendSameAsChat) {
         if (replyingMessageObject != null && replyingMessageObject.messageOwner.reply_markup != null && !TextUtils.isEmpty(replyingMessageObject.messageOwner.reply_markup.placeholder)) {
             messageEditText.setHintText(replyingMessageObject.messageOwner.reply_markup.placeholder, animated);
         } else if (editingMessageObject != null) {
@@ -4255,7 +4289,7 @@ public class ChatActivityEnterView extends FrameLayout implements NotificationCe
             if (DialogObject.isChatDialog(dialog_id)) {
                 TLRPC.Chat chat = accountInstance.getMessagesController().getChat(-dialog_id);
                 isChannel = ChatObject.isChannel(chat) && !chat.megagroup;
-                anonymously = ChatObject.shouldSendAnonymously(chat);
+                anonymously = ChatObject.shouldSendAnonymously(chat) && sendSameAsChat;
             }
             if (anonymously) {
                 messageEditText.setHintText(LocaleController.getString("SendAnonymously", R.string.SendAnonymously));
