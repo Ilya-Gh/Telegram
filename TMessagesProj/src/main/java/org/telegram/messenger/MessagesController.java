@@ -131,7 +131,9 @@ public class MessagesController extends BaseController implements NotificationCe
 
     private LongSparseArray<ArrayList<Integer>> channelViewsToSend = new LongSparseArray<>();
     private LongSparseArray<SparseArray<MessageObject>> pollsToCheck = new LongSparseArray<>();
+    private LongSparseArray<SparseArray<MessageObject>> reactionToCheck = new LongSparseArray<>();
     private int pollsToCheckSize;
+    private int reactionsToCheckSize;
     private long lastViewsCheckTime;
 
     public ArrayList<DialogFilter> dialogFilters = new ArrayList<>();
@@ -2787,6 +2789,13 @@ public class MessagesController extends BaseController implements NotificationCe
                         object.pollVisibleOnScreen = false;
                     }
                 }
+                SparseArray<MessageObject> array2 = reactionToCheck.get(dialogId);
+                if (array2 != null) {
+                    for (int a = 0, N2 = array2.size(); a < N2; a++) {
+                        MessageObject object = array2.valueAt(a);
+                        object.reactionVisibleOnScreen = false;
+                    }
+                }
             }
         }
         Utilities.stageQueue.postRunnable(() -> {
@@ -5430,6 +5439,55 @@ public class MessagesController extends BaseController implements NotificationCe
                         }
                     }
                     pollsToCheckSize = pollsToCheck.size();
+                });
+            }
+
+            if (reactionsToCheckSize > 0) {
+                AndroidUtilities.runOnUIThread(() -> {
+                    long time = SystemClock.elapsedRealtime();
+                    for (int a = 0, N = reactionToCheck.size(); a < N; a++) {
+                        SparseArray<MessageObject> array = reactionToCheck.valueAt(a);
+                        if (array == null) {
+                            continue;
+                        }
+                        for (int b = 0, N2 = array.size(); b < N2; b++) {
+                            MessageObject messageObject = array.valueAt(b);
+                            int timeout = 15000;
+
+                            if (Math.abs(time - messageObject.reactionsLastCheckTime) < timeout) {
+                                if (!messageObject.reactionVisibleOnScreen) {
+                                    array.remove(messageObject.getId());
+                                    N2--;
+                                    b--;
+                                }
+                            }
+
+                            messageObject.reactionsLastCheckTime = time;
+
+                        }
+                        if (array.size() != 0) {
+                            TLRPC.TL_messages_getMessagesReactions req = new TLRPC.TL_messages_getMessagesReactions();
+                            req.peer = getInputPeer(array.valueAt(0).getDialogId());
+                            ArrayList<Integer> ids = new ArrayList<Integer>();
+                            for (int i = 0; i < array.size(); i++) {
+                                ids.add(array.valueAt(i).getId());
+                            }
+                            req.id = ids;
+                            getConnectionsManager().sendRequest(req, (response, error) -> {
+                                if (error == null) {
+                                    TLRPC.Updates updates = (TLRPC.Updates) response;
+                                    processUpdates(updates, false);
+                                }
+                            });
+                        }
+
+                        if (array.size() == 0) {
+                            reactionToCheck.remove(reactionToCheck.keyAt(a));
+                            N--;
+                            a--;
+                        }
+                    }
+                    reactionsToCheckSize = reactionToCheck.size();
                 });
             }
         }
@@ -8465,6 +8523,33 @@ public class MessagesController extends BaseController implements NotificationCe
                 ids.add(id);
             }
         });
+    }
+
+    public void addMessageReactionQueue(long dialogId, ArrayList<MessageObject> visibleObjects) {
+        SparseArray<MessageObject> array = reactionToCheck.get(dialogId);
+        if (array == null) {
+            array = new SparseArray<>();
+            reactionToCheck.put(dialogId, array);
+            reactionsToCheckSize++;
+        }
+        for (int a = 0, N = array.size(); a < N; a++) {
+            MessageObject object = array.valueAt(a);
+            object.reactionVisibleOnScreen = false;
+        }
+        for (int a = 0, N = visibleObjects.size(); a < N; a++) {
+            MessageObject messageObject = visibleObjects.get(a);
+            if (!messageObject.hasReactions()) {
+                continue;
+            }
+
+            int id = messageObject.getId();
+            MessageObject object = array.get(id);
+            if (object != null) {
+                object.reactionVisibleOnScreen = true;
+            } else {
+                array.put(id, messageObject);
+            }
+        }
     }
 
     public void addToPollsQueue(long dialogId, ArrayList<MessageObject> visibleObjects) {

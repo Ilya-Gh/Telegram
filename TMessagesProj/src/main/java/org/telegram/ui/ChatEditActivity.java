@@ -44,7 +44,9 @@ import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
+import org.telegram.tgnet.ResultCallback;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.TLRPC.TL_availableReaction;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.AlertDialog;
@@ -114,6 +116,7 @@ public class ChatEditActivity extends BaseFragment implements ImageUpdater.Image
     private TextCell memberRequestsCell;
     private TextCell inviteLinksCell;
     private TextCell adminCell;
+    private TextCell reactionCell;
     private TextCell blockCell;
     private TextCell logCell;
     private TextCell setAvatarCell;
@@ -821,6 +824,21 @@ public class ChatEditActivity extends BaseFragment implements ImageUpdater.Image
             presentFragment(fragment);
         });
 
+        reactionCell = new TextCell(context);
+        reactionCell.setBackgroundDrawable(Theme.getSelectorDrawable(false));
+        reactionCell.setOnClickListener(v -> {
+            ReactionsActivity reactionsActivity = new ReactionsActivity(currentChat.id);
+            if (ReactionsController.availableReactions == null) {
+                ReactionsController.requestReaction(result -> {
+                    reactionsActivity.setInfo(info, ReactionsController.availableReactions);
+                    presentFragment(reactionsActivity);
+                });
+            } else {
+                reactionsActivity.setInfo(info, ReactionsController.availableReactions);
+                presentFragment(reactionsActivity);
+            }
+        });
+
         membersCell = new TextCell(context);
         membersCell.setBackgroundDrawable(Theme.getSelectorDrawable(false));
         membersCell.setOnClickListener(v -> {
@@ -855,6 +873,7 @@ public class ChatEditActivity extends BaseFragment implements ImageUpdater.Image
             infoContainer.addView(inviteLinksCell, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
         }
         infoContainer.addView(adminCell, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+        infoContainer.addView(reactionCell, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
         infoContainer.addView(membersCell, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
         if (memberRequestsCell != null && info != null && info.requests_pending > 0) {
             infoContainer.addView(memberRequestsCell, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
@@ -1109,6 +1128,30 @@ public class ChatEditActivity extends BaseFragment implements ImageUpdater.Image
             }
         }
         return count;
+    }
+
+    private void upgradeReactionCount() {
+        reactionCell.setTextAndIcon(LocaleController.getString("ChannelReactions", R.string.ChannelReactions),
+                R.drawable.actions_reactions, true);
+        ReactionsController.requestReaction(new ResultCallback<ArrayList<TL_availableReaction>>() {
+            @Override
+            public void onComplete(ArrayList<TL_availableReaction> result) {
+
+                int count = 0;
+                for (int i = 0; i < result.size(); i++) {
+                    for (int j = 0; j < info.available_reactions.size(); j++) {
+                        if (result.get(i).reaction.equals(info.available_reactions.get(j)))  {
+                             count++;
+                        }
+                    }
+                }
+                reactionCell.setTextAndValueAndIcon(
+                        LocaleController.getString("ChannelReactions", R.string.ChannelReactions), String.format("%s",
+                                !info.available_reactions.isEmpty() ? String.format("%d/%d", count, result.size())
+                                        : LocaleController.getString("ReactionsOff", R.string.ReactionsOff)),
+                        R.drawable.actions_reactions, true);
+            }
+        });
     }
 
     private void processDone() {
@@ -1425,7 +1468,11 @@ public class ChatEditActivity extends BaseFragment implements ImageUpdater.Image
                         memberRequestsCell.setTextAndValueAndIcon(LocaleController.getString("MemberRequests", R.string.MemberRequests), String.format("%d", info.requests_pending), R.drawable.actions_requests, logCell != null && logCell.getVisibility() == View.VISIBLE);
                     }
                 }
-                adminCell.setTextAndValueAndIcon(LocaleController.getString("ChannelAdministrators", R.string.ChannelAdministrators), String.format("%d", ChatObject.isChannel(currentChat) ? info.admins_count : getAdminCount()), R.drawable.actions_addadmin, true);
+                adminCell.setTextAndValueAndIcon(
+                        LocaleController.getString("ChannelAdministrators", R.string.ChannelAdministrators),
+                        String.format("%d", ChatObject.isChannel(currentChat) ? info.admins_count : getAdminCount()),
+                        R.drawable.actions_addadmin, true);
+                upgradeReactionCount();
             } else {
                 if (isChannel) {
                     membersCell.setTextAndIcon(LocaleController.getString("ChannelSubscribers", R.string.ChannelSubscribers), R.drawable.actions_viewmembers, true);
@@ -1438,7 +1485,11 @@ public class ChatEditActivity extends BaseFragment implements ImageUpdater.Image
                         blockCell.setTextAndIcon(LocaleController.getString("ChannelPermissions", R.string.ChannelPermissions), R.drawable.actions_permissions, true);
                     }
                 }
-                adminCell.setTextAndIcon(LocaleController.getString("ChannelAdministrators", R.string.ChannelAdministrators), R.drawable.actions_addadmin, true);
+                adminCell.setTextAndIcon(
+                        LocaleController.getString("ChannelAdministrators", R.string.ChannelAdministrators),
+                        R.drawable.actions_addadmin, true);
+                reactionCell.setTextAndIcon(LocaleController.getString("ChannelReactions", R.string.ChannelReactions),
+                        R.drawable.actions_reactions, true);
             }
             if (info == null || !ChatObject.canUserDoAdminAction(currentChat, ChatObject.ACTION_INVITE) || (!isPrivate && currentChat.creator)) {
                 inviteLinksCell.setVisibility(View.GONE);

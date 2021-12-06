@@ -124,7 +124,15 @@ public class AlertsCreator {
         if (error.code == 406 || error.text == null) {
             return null;
         }
-        if (request instanceof TLRPC.TL_messages_initHistoryImport || request instanceof TLRPC.TL_messages_checkHistoryImportPeer || request instanceof TLRPC.TL_messages_checkHistoryImport || request instanceof TLRPC.TL_messages_startHistoryImport) {
+        if (request instanceof TLRPC.TL_messages_setChatAvailableReactions) {
+            if (error.text.contains("USER_IS_BLOCKED")) {
+                showSimpleAlert(fragment, LocaleController.getString("ReactionChangeError", R.string.ReactionChangeError),
+                        LocaleController.getString("ReactionChangeErrorText", R.string.ReactionChangeErrorText));
+            }
+        } else if (request instanceof TLRPC.TL_messages_initHistoryImport
+                || request instanceof TLRPC.TL_messages_checkHistoryImportPeer
+                || request instanceof TLRPC.TL_messages_checkHistoryImport
+                || request instanceof TLRPC.TL_messages_startHistoryImport) {
             TLRPC.InputPeer peer;
             if (request instanceof TLRPC.TL_messages_initHistoryImport) {
                 peer = ((TLRPC.TL_messages_initHistoryImport) request).peer;
@@ -134,7 +142,8 @@ public class AlertsCreator {
                 peer = null;
             }
             if (error.text.contains("USER_IS_BLOCKED")) {
-                showSimpleAlert(fragment, LocaleController.getString("ImportErrorTitle", R.string.ImportErrorTitle), LocaleController.getString("ImportErrorUserBlocked", R.string.ImportErrorUserBlocked));
+                showSimpleAlert(fragment, LocaleController.getString("ImportErrorTitle", R.string.ImportErrorTitle),
+                        LocaleController.getString("ImportErrorUserBlocked", R.string.ImportErrorUserBlocked));
             } else if (error.text.contains("USER_NOT_MUTUAL_CONTACT")) {
                 showSimpleAlert(fragment, LocaleController.getString("ImportErrorTitle", R.string.ImportErrorTitle), LocaleController.getString("ImportMutualError", R.string.ImportMutualError));
             } else if (error.text.contains("IMPORT_PEER_TYPE_INVALID")) {

@@ -17,6 +17,7 @@ import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaDataController;
+import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
@@ -24,6 +25,7 @@ import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.TLRPC.TL_availableReaction;
 import org.telegram.ui.Cells.ChatMessageCell;
 import org.telegram.ui.Components.Bulletin;
 import org.telegram.ui.Components.BulletinFactory;
@@ -227,15 +229,51 @@ public class EmojiAnimationsOverlay implements NotificationCenter.NotificationCe
                             drawingObject.viewFound = true;
                             float viewX = listView.getX() + child.getX() + cell.getPhotoImage().getImageX();
                             float viewY = listView.getY() + child.getY() + cell.getPhotoImage().getImageY();
-                            if (drawingObject.isOut) {
-                                viewX += -cell.getPhotoImage().getImageWidth() * 2 + AndroidUtilities.dp(24);
+
+                            if (drawingObject.isReaction) {
+                                viewX = Math.min(listView.getWidth(), AndroidUtilities.displaySize.x) * 0.5f;
+
+                                if (drawingObject.isSticker) {
+                                    viewX = viewX - AndroidUtilities.dp(75);
+                                    viewY = listView.getY() + child.getY() - AndroidUtilities.dp(75)
+                                            + (cell.getHeight() / 2);
+                                } else {
+                                    if (drawingObject.isOut) {
+                                        viewX = -AndroidUtilities.dp(75);
+                                        viewY = listView.getY() + child.getY() - AndroidUtilities.dp(150)
+                                                + (cell.getHeight() / 2);
+                                    } else {
+                                        viewX = viewX - AndroidUtilities.dp(75);
+                                        viewY = listView.getY() + child.getY() - AndroidUtilities.dp(150)
+                                                + (cell.getHeight() / 2);
+                                    }
+                                }
+
+                                // if (drawingObject.isOut) {
+                                //     viewX += -200 * 2 + AndroidUtilities.dp(24);
+                                // } else {
+                                //     viewX += -AndroidUtilities.dp(24);
+                                // }
                             } else {
-                                viewX += -AndroidUtilities.dp(24);
+                                if (drawingObject.isOut) {
+                                    viewX += -cell.getPhotoImage().getImageWidth() * 2 + AndroidUtilities.dp(24);
+                                } else {
+                                    viewX += -AndroidUtilities.dp(24);
+                                }
+                                viewY -= cell.getPhotoImage().getImageWidth();
                             }
-                            viewY -= cell.getPhotoImage().getImageWidth();
+
                             drawingObject.lastX = viewX;
                             drawingObject.lastY = viewY;
-                            drawingObject.lastW = cell.getPhotoImage().getImageWidth();
+                            if (drawingObject.isReaction) {
+                                if (drawingObject.isSticker) {
+                                    drawingObject.lastW = AndroidUtilities.dp(50);
+                                }      else  {
+                                    drawingObject.lastW = AndroidUtilities.dp(120);
+                                }
+                            } else {
+                                drawingObject.lastW = cell.getPhotoImage().getImageWidth();
+                            }
                             break;
                         }
                     }
@@ -253,9 +291,11 @@ public class EmojiAnimationsOverlay implements NotificationCenter.NotificationCe
                 if (drawingObject.wasPlayed && drawingObject.imageReceiver.getLottieAnimation() != null && drawingObject.imageReceiver.getLottieAnimation().getCurrentFrame() == drawingObject.imageReceiver.getLottieAnimation().getFramesCount() - 2) {
                     drawingObjects.remove(i);
                     i--;
-                } else if (drawingObject.imageReceiver.getLottieAnimation() != null && drawingObject.imageReceiver.getLottieAnimation().isRunning()) {
+                } else if (drawingObject.imageReceiver.getLottieAnimation() != null
+                        && drawingObject.imageReceiver.getLottieAnimation().isRunning()) {
                     drawingObject.wasPlayed = true;
-                } else if (drawingObject.imageReceiver.getLottieAnimation() != null && !drawingObject.imageReceiver.getLottieAnimation().isRunning()) {
+                } else if (drawingObject.imageReceiver.getLottieAnimation() != null
+                        && !drawingObject.imageReceiver.getLottieAnimation().isRunning()) {
                     drawingObject.imageReceiver.getLottieAnimation().setCurrentFrame(0, true);
                     drawingObject.imageReceiver.getLottieAnimation().start();
                 }
@@ -264,8 +304,23 @@ public class EmojiAnimationsOverlay implements NotificationCenter.NotificationCe
         }
     }
 
+    public void onReactionSelected(ChatMessageCell cell, MessageObject messageId, TL_availableReaction reaction, ChatActivity chatActivity) {
+        if (chatActivity.isSecretChat()) {
+            return;
+        }
+
+        boolean show = showAnimationForCellReaction(cell, messageId, -1, reaction.reaction, reaction);
+
+        if (show) {
+            cell.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+        }
+    }
+
     public void onTapItem(ChatMessageCell view, ChatActivity chatActivity) {
-        if (chatActivity.currentUser == null || chatActivity.isSecretChat() || view.getMessageObject() == null || view.getMessageObject().getId() < 0) {
+        if (chatActivity.currentUser == null
+                || chatActivity.isSecretChat()
+                || view.getMessageObject() == null
+                || view.getMessageObject().getId() < 0) {
             return;
         }
         boolean show = showAnimationForCell(view, -1, true, false);
@@ -273,7 +328,8 @@ public class EmojiAnimationsOverlay implements NotificationCenter.NotificationCe
             view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
         }
 
-        Integer printingType = MessagesController.getInstance(currentAccount).getPrintingStringType(dialogId, threadMsgId);
+        Integer printingType =
+                MessagesController.getInstance(currentAccount).getPrintingStringType(dialogId, threadMsgId);
         boolean canShowHint = true;
         if (printingType != null && printingType == 5) {
             canShowHint = false;
@@ -303,6 +359,101 @@ public class EmojiAnimationsOverlay implements NotificationCenter.NotificationCe
             AndroidUtilities.cancelRunOnUIThread(hintRunnable);
         }
         hintRunnable = null;
+    }
+
+
+    private boolean showAnimationForCellReaction(ChatMessageCell cell, MessageObject messageObject, int animation, String reaction, TL_availableReaction availableReaction) {
+        if (drawingObjects.size() >= 2) {
+            drawingObjects.clear();
+        }
+
+        String emoji = reaction;
+        if (emoji == null) {
+            return false;
+        }
+        float imageH = cell.getHeight();
+        float imageW = 200;
+
+        // ArrayList<TLRPC.Document> arrayList = emojiInteractionsStickersMap.get(emoji);
+        // if (arrayList != null && !arrayList.isEmpty()) {
+        //     int sameAnimationsCount = 0;
+        //     for (int i = 0; i < drawingObjects.size(); i++) {
+        //         // if (drawingObjects.get(i).messageId == view.getMessageObject().getId()) {
+        //         sameAnimationsCount++;
+        //         if (drawingObjects.get(i).imageReceiver.getLottieAnimation() == null || drawingObjects.get(
+        //                 i).imageReceiver.getLottieAnimation().isGeneratingCache()) {
+        //             return false;
+        //         }
+        //         // }
+        //     }
+        //     if (sameAnimationsCount >= 4) {
+        //         return false;
+        //     }
+        // }
+        //
+
+
+
+        TLRPC.Document selectAnimation = availableReaction.activate_animation;
+
+        DrawingObject drawingObjectSelect = new DrawingObject();
+        // drawingObjectSelect.randomOffsetX = imageH / 4 * ((random.nextInt() % 101) / 100f);
+        // drawingObjectSelect.randomOffsetY = imageW / 4 * ((random.nextInt() % 101) / 100f);
+        drawingObjectSelect.messageId = messageObject.getId();
+        drawingObjectSelect.isReaction = true;
+        drawingObjectSelect.isSticker = true;
+        drawingObjectSelect.document = selectAnimation;
+        drawingObjectSelect.isOut = !messageObject.isOutOwner();
+
+        Integer lastIndex2 = lastAnimationIndex.get(selectAnimation.id);
+        int currentIndex2 = lastIndex2 == null ? 0 : lastIndex2;
+        lastAnimationIndex.put(selectAnimation.id, (currentIndex2 + 1) % 4);
+
+        ImageLocation imageLocation2 = ImageLocation.getForDocument(selectAnimation);
+        drawingObjectSelect.imageReceiver.setUniqKeyPrefix(currentIndex2 + "_" + "_");
+        int w2 = (int) (2f * imageW / AndroidUtilities.density);
+        drawingObjectSelect.imageReceiver.setImage(imageLocation2, w2 + "_" + w2 + "_pcache", null, "tgs", set, 1);
+        drawingObjectSelect.imageReceiver.setLayerNum(Integer.MAX_VALUE);
+        drawingObjectSelect.imageReceiver.setAllowStartAnimation(true);
+        drawingObjectSelect.imageReceiver.setAutoRepeat(0);
+        if (drawingObjectSelect.imageReceiver.getLottieAnimation() != null) {
+            drawingObjectSelect.imageReceiver.getLottieAnimation().start();
+        }
+        drawingObjects.add(drawingObjectSelect);
+        drawingObjectSelect.imageReceiver.onAttachedToWindow();
+        drawingObjectSelect.imageReceiver.setParentView(contentLayout);
+
+        TLRPC.Document document = availableReaction.effect_animation;
+
+        DrawingObject drawingObject = new DrawingObject();
+        drawingObject.randomOffsetX = imageH / 4 * ((random.nextInt() % 101) / 100f);
+        drawingObject.randomOffsetY = imageW / 4 * ((random.nextInt() % 101) / 100f);
+        drawingObject.messageId = messageObject.getId();
+        drawingObject.isReaction = true;
+        drawingObject.document = document;
+        drawingObject.isOut = !messageObject.isOutOwner();
+
+        Integer lastIndex = lastAnimationIndex.get(document.id);
+        int currentIndex = lastIndex == null ? 0 : lastIndex;
+        lastAnimationIndex.put(document.id, (currentIndex + 1) % 4);
+
+        ImageLocation imageLocation = ImageLocation.getForDocument(document);
+        drawingObject.imageReceiver.setUniqKeyPrefix(currentIndex + "_" + "_");
+        int w = (int) (2f * imageW / AndroidUtilities.density);
+        drawingObject.imageReceiver.setImage(imageLocation, w + "_" + w + "_pcache", null, "tgs", set, 1);
+        drawingObject.imageReceiver.setLayerNum(Integer.MAX_VALUE);
+        drawingObject.imageReceiver.setAllowStartAnimation(true);
+        drawingObject.imageReceiver.setAutoRepeat(0);
+        if (drawingObject.imageReceiver.getLottieAnimation() != null) {
+            drawingObject.imageReceiver.getLottieAnimation().start();
+        }
+        drawingObjects.add(drawingObject);
+        drawingObject.imageReceiver.onAttachedToWindow();
+        drawingObject.imageReceiver.setParentView(contentLayout);
+
+        contentLayout.invalidate();
+
+        return true;
     }
 
     private boolean showAnimationForCell(ChatMessageCell view, int animation, boolean sendTap, boolean sendSeen) {
@@ -472,6 +623,8 @@ public class EmojiAnimationsOverlay implements NotificationCenter.NotificationCe
         boolean wasPlayed;
         boolean isOut;
         int messageId;
+        boolean isReaction;
+        boolean isSticker;
         TLRPC.Document document;
         ImageReceiver imageReceiver = new ImageReceiver();
     }

@@ -41,6 +41,7 @@ import android.view.ViewPropertyAnimator;
 import android.view.accessibility.AccessibilityEvent;
 import android.widget.FrameLayout;
 
+import android.widget.Toast;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.FileLog;
@@ -63,6 +64,7 @@ public class RecyclerListView extends RecyclerView {
     private OnItemClickListenerExtended onItemClickListenerExtended;
     private OnItemLongClickListener onItemLongClickListener;
     private OnItemLongClickListenerExtended onItemLongClickListenerExtended;
+    private OtItemDoubleTabListener onItemDoubleTabListener;
     private boolean longPressCalled;
     private OnScrollListener onScrollListener;
     private OnInterceptTouchListener onInterceptTouchListener;
@@ -108,6 +110,7 @@ public class RecyclerListView extends RecyclerView {
 
     private GestureDetector gestureDetector;
     private View currentChildView;
+    private View doubleTabChildView;
     private int currentChildPosition;
     private boolean interceptedByChild;
     private boolean wasPressed;
@@ -146,9 +149,14 @@ public class RecyclerListView extends RecyclerView {
     HashSet<Integer> selectedPositions;
 
     protected final Theme.ResourcesProvider resourcesProvider;
+    private SelectionCallback selectionCallback;
 
     public FastScroll getFastScroll() {
         return fastScroll;
+    }
+
+    public void setSelectionCallback(SelectionCallback selectionCallback) {
+        this.selectionCallback = selectionCallback;
     }
 
     public interface OnItemClickListener {
@@ -165,12 +173,22 @@ public class RecyclerListView extends RecyclerView {
 
     public interface OnItemLongClickListenerExtended {
         boolean onItemClick(View view, int position, float x, float y);
+
         void onMove(float dx, float dy);
+
         void onLongClickRelease();
     }
 
     public interface OnInterceptTouchListener {
         boolean onInterceptTouchEvent(MotionEvent event);
+    }
+
+    public interface OtItemDoubleTabListener {
+        void onItemClick(View view, int position);
+    }
+
+    public interface SelectionCallback {
+        boolean isSelectionInProgress();
     }
 
     public abstract static class SelectionAdapter extends Adapter {
@@ -722,10 +740,17 @@ public class RecyclerListView extends RecyclerView {
     private class RecyclerListViewItemClickListener implements OnItemTouchListener {
 
         public RecyclerListViewItemClickListener(Context context) {
-            gestureDetector = new GestureDetector(context, new GestureDetector.OnGestureListener() {
+            gestureDetector = new GestureDetector(context, new GestureDetector.SimpleOnGestureListener() {
+                private boolean skipCheck = false;
+
                 @Override
                 public boolean onSingleTapUp(MotionEvent e) {
-                    if (currentChildView != null && (onItemClickListener != null || onItemClickListenerExtended != null)) {
+                    if (onItemDoubleTabListener != null && !skipCheck &&
+                            selectionCallback != null && !selectionCallback.isSelectionInProgress()) {
+                        return false;
+                    }
+                    if (currentChildView != null && (onItemClickListener != null
+                            || onItemClickListenerExtended != null)) {
                         final float x = e.getX();
                         final float y = e.getY();
                         onChildPressed(currentChildView, x, y, true);
@@ -787,7 +812,8 @@ public class RecyclerListView extends RecyclerView {
                             child.sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_LONG_CLICKED);
                         }
                     } else {
-                        if (onItemLongClickListenerExtended.onItemClick(currentChildView, currentChildPosition, event.getX() - currentChildView.getX(), event.getY() - currentChildView.getY())) {
+                        if (onItemLongClickListenerExtended.onItemClick(currentChildView, currentChildPosition,
+                                event.getX() - currentChildView.getX(), event.getY() - currentChildView.getY())) {
                             child.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
                             child.sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_LONG_CLICKED);
                             longPressCalled = true;
@@ -796,7 +822,47 @@ public class RecyclerListView extends RecyclerView {
                 }
 
                 @Override
-                public boolean onDown(MotionEvent e) {
+                public boolean onDoubleTap(MotionEvent e) {
+                    if (currentChildPosition == -1 || onItemDoubleTabListener == null) {
+                        return false;
+                    }
+                    float ex = e.getX();
+                    float ey = e.getY();
+                    ItemAnimator animator = getItemAnimator();
+                    if ((allowItemsInteractionDuringAnimation || animator == null || !animator.isRunning()) && allowSelectChildAtPosition(ex, ey)) {
+                        View v = findChildViewUnder(ex, ey);
+                        if (v != null && allowSelectChildAtPosition(v)) {
+                            currentChildView = v;
+                        }
+                    }
+                    onItemDoubleTabListener.onItemClick(currentChildView, currentChildPosition);
+                    return true;
+                }
+
+                @Override
+                public boolean onSingleTapConfirmed(MotionEvent e) {
+                    if (selectionCallback != null && !selectionCallback.isSelectionInProgress()) {
+                        float ex = e.getX();
+                        float ey = e.getY();
+                        ItemAnimator animator = getItemAnimator();
+                        if ((allowItemsInteractionDuringAnimation || animator == null || !animator.isRunning()) && allowSelectChildAtPosition(ex, ey)) {
+                            View v = findChildViewUnder(ex, ey);
+                            if (v != null && allowSelectChildAtPosition(v)) {
+                                currentChildView = v;
+                            }  
+                        }
+                    }  else {
+                        return false;
+                    }
+                    skipCheck = true;
+                    onSingleTapUp(e);
+                    skipCheck = false;
+                    currentChildView = null;
+                    return true;
+                }
+
+                @Override
+                public boolean onDown(MotionEvent event) {
                     return false;
                 }
 
@@ -832,6 +898,7 @@ public class RecyclerListView extends RecyclerView {
                     View v = findChildViewUnder(ex, ey);
                     if (v != null && allowSelectChildAtPosition(v)) {
                         currentChildView = v;
+                        doubleTabChildView = v;
                     }
                 }
                 if (currentChildView instanceof ViewGroup) {
@@ -1430,6 +1497,10 @@ public class RecyclerListView extends RecyclerView {
 
     public void setOnItemClickListener(OnItemClickListenerExtended listener) {
         onItemClickListenerExtended = listener;
+    }
+
+    public void setOnItemDoubleTabListener(OtItemDoubleTabListener listener) {
+        onItemDoubleTabListener = listener;
     }
 
     public OnItemClickListener getOnItemClickListener() {
